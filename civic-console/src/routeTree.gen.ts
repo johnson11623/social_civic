@@ -15,6 +15,7 @@ import { Route as JoinRouteImport } from './routes/join'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedAccountRouteImport } from './routes/_authed/account'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
+import { Route as AuthedPostsPostIdRouteImport } from './routes/_authed/posts.$postId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -45,6 +46,11 @@ const ApiSplatRoute = ApiSplatRouteImport.update({
   path: '/api/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedPostsPostIdRoute = AuthedPostsPostIdRouteImport.update({
+  id: '/posts/$postId',
+  path: '/posts/$postId',
+  getParentRoute: () => AuthedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/account': typeof AuthedAccountRoute
   '/api/$': typeof ApiSplatRoute
+  '/posts/$postId': typeof AuthedPostsPostIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/account': typeof AuthedAccountRoute
   '/api/$': typeof ApiSplatRoute
+  '/posts/$postId': typeof AuthedPostsPostIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -68,12 +76,13 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authed/account': typeof AuthedAccountRoute
   '/api/$': typeof ApiSplatRoute
+  '/_authed/posts/$postId': typeof AuthedPostsPostIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/join' | '/login' | '/account' | '/api/$'
+  fullPaths: '/' | '/join' | '/login' | '/account' | '/api/$' | '/posts/$postId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/join' | '/login' | '/account' | '/api/$'
+  to: '/' | '/join' | '/login' | '/account' | '/api/$' | '/posts/$postId'
   id:
     | '__root__'
     | '/'
@@ -82,6 +91,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authed/account'
     | '/api/$'
+    | '/_authed/posts/$postId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -136,15 +146,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/posts/$postId': {
+      id: '/_authed/posts/$postId'
+      path: '/posts/$postId'
+      fullPath: '/posts/$postId'
+      preLoaderRoute: typeof AuthedPostsPostIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
 interface AuthedRouteChildren {
   AuthedAccountRoute: typeof AuthedAccountRoute
+  AuthedPostsPostIdRoute: typeof AuthedPostsPostIdRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAccountRoute: AuthedAccountRoute,
+  AuthedPostsPostIdRoute: AuthedPostsPostIdRoute,
 }
 
 const AuthedRouteWithChildren =

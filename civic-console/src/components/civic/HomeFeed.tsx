@@ -4,6 +4,7 @@ import type { Channel, ChannelList, FeedPage, Level, Post } from "@/api/api-cont
 import { useToast } from "@/components/ui/Toast";
 import { describeError, type Settled, settle } from "@/lib/api-errors";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useLikeToggle } from "@/lib/use-like";
 import { callApiEither } from "@/runtimes/get-runtime";
 import { Composer } from "./Composer";
 import { Feed } from "./Feed";
@@ -50,7 +51,6 @@ export function HomeFeed({ level: initialLevel, feed, channels, onLevelChange }:
 
 	// Responses for a tab the user already left are dropped.
 	const request = useRef(0);
-	const liking = useRef(new Set<string>());
 
 	const load = useCallback(
 		async (next: Level) => {
@@ -103,42 +103,7 @@ export function HomeFeed({ level: initialLevel, feed, channels, onLevelChange }:
 		setPosts((all) => all.map((p) => (p.postId === postId ? change(p) : p)));
 	}, []);
 
-	// T-W1.4.1.6 — the heart flips at once; the server's count replaces the
-	// guess, and a failure puts the card back as it was.
-	const onLike = useCallback(
-		async (post: Post) => {
-			if (liking.current.has(post.postId)) return;
-			liking.current.add(post.postId);
-			const was = { liked: post.liked ?? false, likes: post.counts.likes };
-			const liked = !was.liked;
-			update(post.postId, (p) => ({
-				...p,
-				liked,
-				counts: { ...p.counts, likes: Math.max(0, p.counts.likes + (liked ? 1 : -1)) },
-			}));
-			const res = settle(
-				await callApiEither((api) =>
-					liked
-						? api.posts.like({ path: { postId: post.postId } })
-						: api.posts.unlike({ path: { postId: post.postId } }),
-				),
-			);
-			liking.current.delete(post.postId);
-			if (res.ok) {
-				update(post.postId, (p) => ({
-					...p,
-					liked: res.value.liked,
-					counts: { ...p.counts, likes: res.value.likes },
-				}));
-			} else if (liked && res.error.code === "already_liked") {
-				// Liked from another device: the server agrees with the new state.
-			} else {
-				update(post.postId, (p) => ({ ...p, liked: was.liked, counts: { ...p.counts, likes: was.likes } }));
-				toast(t("error.likeFailed"), "error");
-			}
-		},
-		[t, toast, update],
-	);
+	const onLike = useLikeToggle(update);
 
 	const onWhy = useCallback((post: Post) => setWhy(post), []);
 

@@ -215,3 +215,47 @@ describe("likes", () => {
 		expect(await res.json()).toMatchObject({ _tag: "Conflict", code: "already_liked" });
 	});
 });
+
+describe("post detail and replies", () => {
+	it("gets a post, its thread with cursor, and posts a reply", async () => {
+		const { go, handler } = start((url, seen) => {
+			if (seen.method === "POST")
+				return { status: 201, body: goPost({ post_id: "r1", root_id: "p1", parent_id: "p1", level: 1 }) };
+			if (url.pathname.endsWith("/replies"))
+				return {
+					status: 200,
+					body: {
+						post_id: "p1",
+						items: [goPost({ post_id: "r1", root_id: "p1", parent_id: "p1" })],
+						has_more: false,
+					},
+				};
+			return { status: 200, body: goPost() };
+		});
+		expect(await (await handler(req("GET", "/api/posts/p1"))).json()).toMatchObject({
+			post_id: "p1",
+			level: 2,
+		});
+		const thread = await (await handler(req("GET", "/api/posts/p1/replies?limit=50&cursor=c"))).json();
+		expect(thread).toMatchObject({
+			post_id: "p1",
+			has_more: false,
+			items: [{ post_id: "r1", parent_id: "p1" }],
+		});
+		const reply = await handler(req("POST", "/api/posts/p1/replies", { content: "Asante" }));
+		expect(reply.status).toBe(201);
+
+		expect(go.seen.map((s) => `${s.method} ${new URL(s.url).pathname}${new URL(s.url).search}`)).toEqual([
+			"GET /v1/posts/p1",
+			"GET /v1/posts/p1/replies?cursor=c&limit=50",
+			"POST /v1/posts/p1/replies",
+		]);
+		expect(go.seen[2]?.body).toEqual({ content: "Asante" });
+	});
+
+	it("reports a frozen post's refusal as Conflict", async () => {
+		const { handler } = start(() => problem(409, "post_not_active"));
+		const res = await handler(req("POST", "/api/posts/p1/replies", { content: "x" }));
+		expect(await res.json()).toMatchObject({ _tag: "Conflict", code: "post_not_active" });
+	});
+});

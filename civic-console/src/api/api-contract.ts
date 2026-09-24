@@ -283,11 +283,7 @@ export type FeedLevel = typeof FeedLevel.Type;
 export const FeedParams = Schema.Struct({
 	level: Schema.optional(FeedLevel),
 	cursor: Schema.optional(Schema.String.pipe(Schema.maxLength(512))),
-	// A string from the browser's query; a number from SSR, whose direct
-	// handler calls skip URL encoding (effect-tanstack-start).
-	limit: Schema.optional(
-		Schema.Union(Schema.NumberFromString, Schema.Number).pipe(Schema.int(), Schema.between(1, 50)),
-	),
+	limit: Schema.optional(Schema.NumberFromString.pipe(Schema.int(), Schema.between(1, 50))),
 });
 
 export const FeedPage = Schema.Struct({
@@ -324,6 +320,21 @@ export type LikeState = typeof LikeState.Type;
 
 const PostPath = Schema.Struct({ postId: Schema.String });
 
+export const ThreadParams = Schema.Struct({
+	cursor: Schema.optional(Schema.String.pipe(Schema.maxLength(512))),
+	limit: Schema.optional(Schema.NumberFromString.pipe(Schema.int(), Schema.between(1, 100))),
+});
+
+/** A page of the replies under a top-level post, oldest first. */
+export const ThreadPage = Schema.Struct({
+	/** The thread's top-level post (also when asked via a reply). */
+	postId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("post_id")),
+	items: Schema.Array(Post),
+	nextCursor: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("next_cursor")),
+	hasMore: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("has_more")),
+});
+export type ThreadPage = typeof ThreadPage.Type;
+
 export class PostsGroup extends HttpApiGroup.make("posts")
 	.add(
 		HttpApiEndpoint.get("feed", "/feed")
@@ -349,6 +360,38 @@ export class PostsGroup extends HttpApiGroup.make("posts")
 			.setPayload(Schema.Struct({ content: Schema.String.pipe(Schema.maxLength(MAX_POST_LENGTH * 2)) }))
 			.addSuccess(Post, { status: 201 })
 			.addError(Unauthorized)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.get("post", "/posts/:postId")
+			.setPath(PostPath)
+			.addSuccess(Post)
+			.addError(Unauthorized)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.get("replies", "/posts/:postId/replies")
+			.setPath(PostPath)
+			.setUrlParams(ThreadParams)
+			.addSuccess(ThreadPage)
+			.addError(Unauthorized)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("reply", "/posts/:postId/replies")
+			.setPath(PostPath)
+			.setPayload(Schema.Struct({ content: Schema.String.pipe(Schema.maxLength(MAX_POST_LENGTH * 2)) }))
+			.addSuccess(Post, { status: 201 })
+			.addError(Unauthorized)
+			.addError(Conflict)
 			.addError(ValidationFailed)
 			.addError(RateLimited)
 			.addError(BackendUnavailable)

@@ -1,5 +1,5 @@
 diff --git a/src/ssr-api-client.ts b/src/ssr-api-client.ts
-index 25c6026260260b7de90d3ab0c0a594fa8d659deb..d0e89f031317cc8d01714aa37c34016a0c7c08f2 100644
+index 25c6026260260b7de90d3ab0c0a594fa8d659deb..8f27526c9bc30d7b4dadcb00e19d87c617dce722 100644
 --- a/src/ssr-api-client.ts
 +++ b/src/ssr-api-client.ts
 @@ -23,7 +23,8 @@
@@ -69,7 +69,36 @@ index 25c6026260260b7de90d3ab0c0a594fa8d659deb..d0e89f031317cc8d01714aa37c34016a
          }) {
            const ep: ReflectedEndpoint = endpoint;
            const route = routeIndex.get(`${ep.method} ${ep.path}`);
-@@ -291,7 +323,14 @@ export function makeSsrApiClientLayer<
+@@ -237,11 +269,26 @@ export function makeSsrApiClientLayer<
+             throw new Error(`No route found for ${ep.method} ${ep.path}`);
+           }
+ 
++          // URL params reach handlers as strings over HTTP; the handler decodes
++          // them (e.g. NumberFromString). Encode the caller's Type values the
++          // same way so SSR calls decode identically.
++          const urlParamsSchema = Option.getOrUndefined(
++            (ep as unknown as { urlParamsSchema: Option.Option<Schema.Schema<unknown, unknown>> })
++              .urlParamsSchema,
++          );
++          const encodeUrlParams = (params: unknown): Effect.Effect<Record<string, unknown>> =>
++            params === undefined
++              ? Effect.succeed({})
++              : urlParamsSchema
++                ? (Effect.orDie(Schema.encode(urlParamsSchema)(params)) as Effect.Effect<Record<string, unknown>>)
++                : Effect.succeed(params as Record<string, unknown>);
++
+           const endpointFn = (request: EndpointRequest): Effect.Effect<unknown, unknown> =>
+-            Effect.flatMap(getForwardedHeaders, (forwarded) => {
++            Effect.flatMap(
++              Effect.all([getForwardedHeaders, encodeUrlParams(request?.urlParams)]),
++              ([forwarded, urlParams]) => {
+               const pathParams = request?.path ?? {};
+               const payload = request?.payload;
+-              const urlParams = request?.urlParams ?? {};
+ 
+               const headers = Headers.fromInput({
+                 ...forwarded,
+@@ -291,7 +338,14 @@ export function makeSsrApiClientLayer<
                      urlParams as Readonly<Record<string, string | Array<string>>>,
                    ),
                  ),

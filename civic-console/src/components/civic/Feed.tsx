@@ -82,6 +82,7 @@ export function Feed(props: Props) {
 						key={post.postId}
 						post={post}
 						pending={props.pendingIds.has(post.postId)}
+						linkThread
 						onLike={props.onLike}
 						onWhy={props.onWhy}
 					/>

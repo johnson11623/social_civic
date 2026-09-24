@@ -16,6 +16,8 @@ type Props = {
 	onWhy: (post: Post) => void;
 	/** Optimistic: not yet confirmed by the server. */
 	pending?: boolean;
+	/** Link the reply count to the thread (feed cards; not the detail page). */
+	linkThread?: boolean;
 };
 
 /**
@@ -26,7 +28,13 @@ type Props = {
  * T-W1.4.1.8 — memoized: the feed replaces only the post that changed, so
  * liking one card never re-renders the rest.
  */
-export const PostCard = memo(function PostCard({ post, onLike, onWhy, pending = false }: Props) {
+export const PostCard = memo(function PostCard({
+	post,
+	onLike,
+	onWhy,
+	pending = false,
+	linkThread = false,
+}: Props) {
 	const { t, lang } = useT();
 	const name = post.author?.displayName ?? "—";
 
@@ -75,6 +83,7 @@ export const PostCard = memo(function PostCard({ post, onLike, onWhy, pending = 
 				liked={post.liked ?? false}
 				onLike={() => onLike(post)}
 				disabled={pending}
+				threadOf={linkThread && !pending ? post.postId : undefined}
 				trailing={
 					post.level === "ward" && !pending ? (
 						<button

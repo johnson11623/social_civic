@@ -18,6 +18,7 @@ import {
 	Post,
 	SearchResponse,
 	type Session,
+	ThreadPage,
 	Unauthorized,
 	UpstreamError,
 } from "@/api/api-contract";
@@ -241,6 +242,47 @@ const PostsLive = HttpApiBuilder.group(ApiContract, "posts", (handlers) =>
 			}).pipe(
 				Effect.catchTags(
 					narrowTo("Unauthorized", "ValidationFailed", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("post", ({ path }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get(`/v1/posts/${encodeURIComponent(path.postId)}`, Post, yield* authedContext);
+			}).pipe(
+				Effect.catchTags(narrowTo("Unauthorized", "RateLimited", "BackendUnavailable", "UpstreamError")),
+			),
+		)
+		.handle("replies", ({ path, urlParams }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get(`/v1/posts/${encodeURIComponent(path.postId)}/replies`, ThreadPage, {
+					urlParams,
+					...(yield* authedContext),
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "ValidationFailed", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("reply", ({ path, payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post(`/v1/posts/${encodeURIComponent(path.postId)}/replies`, Post, {
+					...(yield* authedContext),
+					body: { content: payload.content },
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo(
+						"Unauthorized",
+						"Conflict",
+						"ValidationFailed",
+						"RateLimited",
+						"BackendUnavailable",
+						"UpstreamError",
+					),
 				),
 			),
 		)

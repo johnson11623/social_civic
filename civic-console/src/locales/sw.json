@@ -142,5 +142,16 @@
 	"composer.scope": "Machapisho huanzia katika wadi yako na hufika ngazi pana tu wakazi wanapoyaona yana manufaa.",
 	"error.likeFailed": "Pendezi lako halikuhifadhiwa. Tafadhali jaribu tena.",
 	"error.postFailed": "Chapisho lako halikuchapishwa.",
-	"common.dismiss": "Funga"
+	"common.dismiss": "Funga",
+	"post.back": "Rudi kwenye machapisho",
+	"post.title": "Chapisho",
+	"post.unavailable": "Chapisho hili halipo, au liko nje ya wadi, eneo bunge na kaunti yako.",
+	"thread.empty": "Bado hakuna majibu. Kuwa wa kwanza kujibu.",
+	"thread.more": "Onyesha majibu zaidi",
+	"reply.action": "Jibu",
+	"reply.label": "Jibu lako",
+	"reply.to": "Mjibu {name}",
+	"reply.submit": "Jibu",
+	"reply.posted": "Jibu limetumwa",
+	"error.replyFailed": "Jibu lako halikutumwa."
 }

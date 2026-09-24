@@ -142,5 +142,16 @@
 	"composer.scope": "Posts start in your ward and reach wider levels only if neighbours find them useful.",
 	"error.likeFailed": "Your like wasn't saved. Please try again.",
 	"error.postFailed": "Your post wasn't published.",
-	"common.dismiss": "Dismiss"
+	"common.dismiss": "Dismiss",
+	"post.back": "Back to feed",
+	"post.title": "Post",
+	"post.unavailable": "This post doesn't exist, or it's outside your ward, constituency and county.",
+	"thread.empty": "No replies yet. Be the first to respond.",
+	"thread.more": "Show more replies",
+	"reply.action": "Reply",
+	"reply.label": "Your reply",
+	"reply.to": "Reply to {name}",
+	"reply.submit": "Reply",
+	"reply.posted": "Reply posted",
+	"error.replyFailed": "Your reply wasn't posted."
 }
