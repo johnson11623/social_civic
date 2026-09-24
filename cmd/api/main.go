@@ -175,8 +175,13 @@ func run(logger *slog.Logger) error {
 	requireConsent := identity.RequireConsent(identityStore, logger)
 	channels := &post.ChannelHandlers{Store: post.NewStore(pool), Logger: logger}
 	// Per-user limit on channel creation (spam), after authentication.
-	channelLimit := ratelimit.Middleware(limiter, ratelimit.Rule{Name: "channel", Limit: 5, Window: time.Hour},
-		post.KeyByUser, tooManyRequests, logger)
+	perUser := func(name string, n int, window time.Duration) func(http.Handler) http.Handler {
+		return ratelimit.Middleware(limiter, ratelimit.Rule{Name: name, Limit: n, Window: window}, post.KeyByUser, tooManyRequests, logger)
+	}
+	channelLimit := perUser("channel", 5, time.Hour)
+	// T-2.1.2.4 — 10 posts a minute and 100 a day per user.
+	postMinute, postDay := perUser("post-min", 10, time.Minute), perUser("post-day", 100, 24*time.Hour)
+	posts := &post.PostHandlers{Store: post.NewStore(pool), Cache: post.RedisFeedCache{Client: rdb}, Logger: logger}
 
 	r := chi.NewRouter()
 	r.Use(requestid.Middleware, middleware.Recoverer)
@@ -197,6 +202,8 @@ func run(logger *slog.Logger) error {
 	r.With(requireAuth).Get("/v1/channels", channels.List)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}", channels.Get)
 	r.With(requireAuth, requireConsent, channelLimit).Post("/v1/channels", channels.Create)
+	r.With(requireAuth, requireConsent, postMinute, postDay).Post("/v1/channels/{channel_id}/posts", posts.Create)
+	r.With(requireAuth).Get("/v1/posts/{post_id}", posts.Get)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

@@ -38,5 +38,11 @@
   "post.channel_name_reserved": "This name is reserved. Please choose another.",
   "post.channel_name_taken": "Your ward already has a channel with this name.",
   "post.invalid_category": "Choose one of: general, services, opportunities, safety, culture.",
-  "post.description_too_long": "Keep the description to 140 characters or fewer."
+  "post.description_too_long": "Keep the description to 140 characters or fewer.",
+  "post.content_empty": "Write something before posting.",
+  "post.content_too_long": "Posts can be up to 500 characters.",
+  "post.media_not_supported": "Photos and videos aren't supported yet.",
+  "post.read_only_channel": "Only moderators can post in this channel.",
+  "post.not_found": "This post does not exist.",
+  "post.out_of_scope": "This post isn't visible in your area."
 }

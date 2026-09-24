@@ -105,6 +105,40 @@ type Outbox struct {
 	LastError    pgtype.Text
 }
 
+type Post struct {
+	ID             int64
+	PublicID       uuid.UUID
+	ChannelID      int64
+	AuthorID       int64
+	Content        pgtype.Text
+	MediaUrl       pgtype.Text
+	Level          int16
+	WardID         int32
+	ConstituencyID int32
+	CountyID       int32
+	Score          float32
+	State          int16
+	CreatedAt      time.Time
+	DeletedAt      *time.Time
+}
+
+type PostsDefault struct {
+	ID             int64
+	PublicID       uuid.UUID
+	ChannelID      int64
+	AuthorID       int64
+	Content        pgtype.Text
+	MediaUrl       pgtype.Text
+	Level          int16
+	WardID         int32
+	ConstituencyID int32
+	CountyID       int32
+	Score          float32
+	State          int16
+	CreatedAt      time.Time
+	DeletedAt      *time.Time
+}
+
 type RefreshToken struct {
 	Jti          uuid.UUID
 	UserID       int64

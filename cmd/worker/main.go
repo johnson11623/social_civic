@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/johnson11623/social_civic/internal/identity"
+	"github.com/johnson11623/social_civic/internal/post"
 	"github.com/johnson11623/social_civic/pkg/events"
 	"github.com/johnson11623/social_civic/pkg/kafka"
 	"github.com/johnson11623/social_civic/pkg/outbox"
@@ -66,10 +67,11 @@ func run(logger *slog.Logger) error {
 	relay := &outbox.Relay{Pool: pool, Producer: producer, Logger: logger}
 	erasure := &identity.ErasureProcessor{Pool: pool, Logger: logger, Now: time.Now}
 
-	logger.Info("worker started", "components", []string{"outbox-relay", "erasure-saga"}, "topics", events.AllTopics)
+	logger.Info("worker started", "components", []string{"outbox-relay", "erasure-saga", "post-partitions"}, "topics", events.AllTopics)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return relay.Run(gctx) })
 	g.Go(func() error { return erasure.Run(gctx) })
+	g.Go(func() error { return post.RunPartitionMaintenance(gctx, pool, logger) })
 	err = g.Wait()
 	logger.Info("worker stopped")
 	return err

@@ -49,7 +49,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 			t.Fatal(err)
 		}
 	})
-	if _, err := pool.Exec(ctx, "TRUNCATE users, consents, channels, outbox RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE users, consents, channels, posts, outbox RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("reset (is the database migrated?): %v", err)
 	}
 	return pool
@@ -59,6 +59,20 @@ type env struct {
 	pool   *pgxpool.Pool
 	router http.Handler
 	tokens *identity.TokenIssuer
+	cache  *fakeCache
+}
+
+type fakeCache struct {
+	mu     sync.Mutex
+	bumped []int32
+	err    error
+}
+
+func (c *fakeCache) BumpWard(_ context.Context, ward int32) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.bumped = append(c.bumped, ward)
+	return c.err
 }
 
 func newEnv(t *testing.T) *env {
@@ -70,13 +84,17 @@ func newEnv(t *testing.T) *env {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := &ChannelHandlers{Store: NewStore(pool), Logger: logger}
+	cache := &fakeCache{}
+	ph := &PostHandlers{Store: NewStore(pool), Cache: cache, Logger: logger}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
 	requireConsent := identity.RequireConsent(identity.NewPostgresStore(pool), logger)
 	r := chi.NewRouter()
 	r.With(requireAuth).Get("/v1/channels", h.List)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}", h.Get)
 	r.With(requireAuth, requireConsent).Post("/v1/channels", h.Create)
-	return &env{pool: pool, router: r, tokens: tokens}
+	r.With(requireAuth, requireConsent).Post("/v1/channels/{channel_id}/posts", ph.Create)
+	r.With(requireAuth).Get("/v1/posts/{post_id}", ph.Get)
+	return &env{pool: pool, router: r, tokens: tokens, cache: cache}
 }
 
 var idSeq = 10000000

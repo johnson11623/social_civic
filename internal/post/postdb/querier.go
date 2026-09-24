@@ -16,7 +16,9 @@ type Querier interface {
 	EnsureGeneralChannels(ctx context.Context) (int64, error)
 	GetActiveUserByPublicID(ctx context.Context, publicID uuid.UUID) (GetActiveUserByPublicIDRow, error)
 	GetChannelByPublicID(ctx context.Context, publicID uuid.UUID) (GetChannelByPublicIDRow, error)
+	GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (GetPostByPublicIDRow, error)
 	InsertChannel(ctx context.Context, arg InsertChannelParams) (InsertChannelRow, error)
+	InsertPost(ctx context.Context, arg InsertPostParams) (InsertPostRow, error)
 	// #general first, then by name.
 	ListWardChannels(ctx context.Context, wardID int32) ([]ListWardChannelsRow, error)
 }

@@ -38,5 +38,11 @@
   "post.channel_name_reserved": "Jina hili limehifadhiwa. Tafadhali chagua jingine.",
   "post.channel_name_taken": "Wadi yako tayari ina kituo chenye jina hili.",
   "post.invalid_category": "Chagua mojawapo: general, services, opportunities, safety, culture.",
-  "post.description_too_long": "Maelezo yasizidi herufi 140."
+  "post.description_too_long": "Maelezo yasizidi herufi 140.",
+  "post.content_empty": "Andika kitu kabla ya kuchapisha.",
+  "post.content_too_long": "Chapisho linaweza kuwa na herufi hadi 500.",
+  "post.media_not_supported": "Picha na video bado hazitumiki.",
+  "post.read_only_channel": "Wasimamizi pekee wanaweza kuchapisha katika kituo hiki.",
+  "post.not_found": "Chapisho hili halipo.",
+  "post.out_of_scope": "Chapisho hili halionekani katika eneo lako."
 }

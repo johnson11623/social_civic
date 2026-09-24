@@ -67,8 +67,10 @@ var (
 
 // ActiveUser is the caller as the post service sees them.
 type ActiveUser struct {
-	ID     int64
-	WardID int32
+	ID             int64
+	WardID         int32
+	ConstituencyID int32
+	CountyID       int32
 }
 
 // Channel is a ward channel.
@@ -103,7 +105,7 @@ func (s *Store) ActiveUser(ctx context.Context, publicID uuid.UUID) (ActiveUser,
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ActiveUser{}, ErrNoActiveUser
 	}
-	return ActiveUser{ID: u.ID, WardID: u.WardID}, err
+	return ActiveUser{ID: u.ID, WardID: u.WardID, ConstituencyID: u.ConstituencyID, CountyID: u.CountyID}, err
 }
 
 // CreateChannel inserts the channel and enqueues channel.created, atomically.
@@ -155,6 +157,12 @@ func (s *Store) ChannelByPublicID(ctx context.Context, id uuid.UUID) (Channel, e
 	}
 	return Channel{PublicID: r.PublicID, WardID: r.WardID, Name: r.Name, Description: r.Description.String,
 		Category: r.Category, ReadOnly: r.ReadOnly, CreatedAt: r.CreatedAt}, nil
+}
+
+// channelRowID maps a channel's public id to its row id.
+func (s *Store) channelRowID(ctx context.Context, id uuid.UUID) (int64, error) {
+	r, err := postdb.New(s.pool).GetChannelByPublicID(ctx, id)
+	return r.ID, err
 }
 
 // WardMemberCount counts a ward's active members.
@@ -350,3 +358,5 @@ func KeyByUser(r *http.Request) string {
 	p, _ := authn.FromContext(r.Context())
 	return "u:" + p.Subject
 }
+
+func pgtypeText(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} }

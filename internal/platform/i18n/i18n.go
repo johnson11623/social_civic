@@ -67,6 +67,12 @@ const (
 	MsgChannelNameTaken    Key = "post.channel_name_taken"
 	MsgInvalidCategory     Key = "post.invalid_category"
 	MsgDescriptionTooLong  Key = "post.description_too_long"
+	MsgContentEmpty        Key = "post.content_empty"
+	MsgContentTooLong      Key = "post.content_too_long"
+	MsgMediaNotSupported   Key = "post.media_not_supported"
+	MsgReadOnlyChannel     Key = "post.read_only_channel"
+	MsgPostNotFound        Key = "post.not_found"
+	MsgOutOfScope          Key = "post.out_of_scope"
 
 	MsgSearchTooShort Key = "boundary.search_too_short"
 	MsgSearchTooLong  Key = "boundary.search_too_long"

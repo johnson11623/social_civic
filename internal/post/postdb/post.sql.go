@@ -42,18 +42,25 @@ func (q *Queries) EnsureGeneralChannels(ctx context.Context) (int64, error) {
 }
 
 const getActiveUserByPublicID = `-- name: GetActiveUserByPublicID :one
-SELECT id, ward_id FROM users WHERE public_id = $1 AND state = 1
+SELECT id, ward_id, constituency_id, county_id FROM users WHERE public_id = $1 AND state = 1
 `
 
 type GetActiveUserByPublicIDRow struct {
-	ID     int64
-	WardID int32
+	ID             int64
+	WardID         int32
+	ConstituencyID int32
+	CountyID       int32
 }
 
 func (q *Queries) GetActiveUserByPublicID(ctx context.Context, publicID uuid.UUID) (GetActiveUserByPublicIDRow, error) {
 	row := q.db.QueryRow(ctx, getActiveUserByPublicID, publicID)
 	var i GetActiveUserByPublicIDRow
-	err := row.Scan(&i.ID, &i.WardID)
+	err := row.Scan(
+		&i.ID,
+		&i.WardID,
+		&i.ConstituencyID,
+		&i.CountyID,
+	)
 	return i, err
 }
 
@@ -92,6 +99,55 @@ func (q *Queries) GetChannelByPublicID(ctx context.Context, publicID uuid.UUID) 
 	return i, err
 }
 
+const getPostByPublicID = `-- name: GetPostByPublicID :one
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.constituency_id, p.county_id, p.score,
+       p.state, p.created_at, c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name
+FROM posts p
+JOIN channels c ON c.id = p.channel_id
+JOIN users u ON u.id = p.author_id
+WHERE p.public_id = $1
+`
+
+type GetPostByPublicIDRow struct {
+	ID                int64
+	PublicID          uuid.UUID
+	Content           pgtype.Text
+	Level             int16
+	WardID            int32
+	ConstituencyID    int32
+	CountyID          int32
+	Score             float32
+	State             int16
+	CreatedAt         time.Time
+	ChannelPublicID   uuid.UUID
+	ChannelName       string
+	AuthorPublicID    uuid.UUID
+	AuthorDisplayName string
+}
+
+func (q *Queries) GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (GetPostByPublicIDRow, error) {
+	row := q.db.QueryRow(ctx, getPostByPublicID, publicID)
+	var i GetPostByPublicIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.PublicID,
+		&i.Content,
+		&i.Level,
+		&i.WardID,
+		&i.ConstituencyID,
+		&i.CountyID,
+		&i.Score,
+		&i.State,
+		&i.CreatedAt,
+		&i.ChannelPublicID,
+		&i.ChannelName,
+		&i.AuthorPublicID,
+		&i.AuthorDisplayName,
+	)
+	return i, err
+}
+
 const insertChannel = `-- name: InsertChannel :one
 INSERT INTO channels (public_id, ward_id, creator_id, name, description, category)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -122,6 +178,42 @@ func (q *Queries) InsertChannel(ctx context.Context, arg InsertChannelParams) (I
 		arg.Category,
 	)
 	var i InsertChannelRow
+	err := row.Scan(&i.ID, &i.CreatedAt)
+	return i, err
+}
+
+const insertPost = `-- name: InsertPost :one
+INSERT INTO posts (public_id, channel_id, author_id, content, ward_id, constituency_id, county_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, created_at
+`
+
+type InsertPostParams struct {
+	PublicID       uuid.UUID
+	ChannelID      int64
+	AuthorID       int64
+	Content        pgtype.Text
+	WardID         int32
+	ConstituencyID int32
+	CountyID       int32
+}
+
+type InsertPostRow struct {
+	ID        int64
+	CreatedAt time.Time
+}
+
+func (q *Queries) InsertPost(ctx context.Context, arg InsertPostParams) (InsertPostRow, error) {
+	row := q.db.QueryRow(ctx, insertPost,
+		arg.PublicID,
+		arg.ChannelID,
+		arg.AuthorID,
+		arg.Content,
+		arg.WardID,
+		arg.ConstituencyID,
+		arg.CountyID,
+	)
+	var i InsertPostRow
 	err := row.Scan(&i.ID, &i.CreatedAt)
 	return i, err
 }
