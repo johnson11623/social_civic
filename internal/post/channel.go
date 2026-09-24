@@ -68,6 +68,8 @@ var (
 // ActiveUser is the caller as the post service sees them.
 type ActiveUser struct {
 	ID             int64
+	PublicID       uuid.UUID
+	DisplayName    string
 	WardID         int32
 	ConstituencyID int32
 	CountyID       int32
@@ -105,7 +107,8 @@ func (s *Store) ActiveUser(ctx context.Context, publicID uuid.UUID) (ActiveUser,
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ActiveUser{}, ErrNoActiveUser
 	}
-	return ActiveUser{ID: u.ID, WardID: u.WardID, ConstituencyID: u.ConstituencyID, CountyID: u.CountyID}, err
+	return ActiveUser{ID: u.ID, PublicID: u.PublicID, DisplayName: u.DisplayName,
+		WardID: u.WardID, ConstituencyID: u.ConstituencyID, CountyID: u.CountyID}, err
 }
 
 // CreateChannel inserts the channel and enqueues channel.created, atomically.

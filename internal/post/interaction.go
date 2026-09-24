@@ -359,8 +359,8 @@ func (h *PostHandlers) Reply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.bump(r, parent)
-	out := postJSON(reply)
-	httpjson.Write(w, http.StatusCreated, out)
+	reply.AuthorID, reply.AuthorName = user.PublicID, user.DisplayName
+	httpjson.Write(w, http.StatusCreated, postJSON(reply))
 }
 
 // Replies serves GET /v1/posts/{post_id}/replies?cursor=&limit= — the whole

@@ -404,11 +404,13 @@ func (q *Queries) FeedWard(ctx context.Context, arg FeedWardParams) ([]FeedWardR
 }
 
 const getActiveUserByPublicID = `-- name: GetActiveUserByPublicID :one
-SELECT id, ward_id, constituency_id, county_id FROM users WHERE public_id = $1 AND state = 1
+SELECT id, public_id, display_name, ward_id, constituency_id, county_id FROM users WHERE public_id = $1 AND state = 1
 `
 
 type GetActiveUserByPublicIDRow struct {
 	ID             int64
+	PublicID       uuid.UUID
+	DisplayName    string
 	WardID         int32
 	ConstituencyID int32
 	CountyID       int32
@@ -419,6 +421,8 @@ func (q *Queries) GetActiveUserByPublicID(ctx context.Context, publicID uuid.UUI
 	var i GetActiveUserByPublicIDRow
 	err := row.Scan(
 		&i.ID,
+		&i.PublicID,
+		&i.DisplayName,
 		&i.WardID,
 		&i.ConstituencyID,
 		&i.CountyID,

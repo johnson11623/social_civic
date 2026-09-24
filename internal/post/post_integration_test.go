@@ -42,7 +42,8 @@ func TestPosts_CreateAtWardLevel(t *testing.T) {
 		t.Fatalf("status %d", status)
 	}
 	if p.Level != LevelWard || p.WardID != kiamwangi || p.State != "active" || p.Score != 0 ||
-		p.Content == nil || *p.Content != "Water point broken at Kiamwangi market" || p.ChannelID != channel {
+		p.Content == nil || *p.Content != "Water point broken at Kiamwangi market" || p.ChannelID != channel ||
+		p.Author == nil || p.Author.DisplayName != "Test" || p.Liked == nil || *p.Liked {
 		t.Errorf("post = %+v", p)
 	}
 

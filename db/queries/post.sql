@@ -1,5 +1,5 @@
 -- name: GetActiveUserByPublicID :one
-SELECT id, ward_id, constituency_id, county_id FROM users WHERE public_id = $1 AND state = 1;
+SELECT id, public_id, display_name, ward_id, constituency_id, county_id FROM users WHERE public_id = $1 AND state = 1;
 
 -- name: InsertChannel :one
 INSERT INTO channels (public_id, ward_id, creator_id, name, description, category)

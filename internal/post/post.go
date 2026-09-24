@@ -301,6 +301,9 @@ func (h *PostHandlers) Create(w http.ResponseWriter, r *http.Request) {
 			h.Logger.WarnContext(r.Context(), "feed cache bump failed", "ward", created.WardID, "err", err)
 		}
 	}
+	created.AuthorID, created.AuthorName = user.PublicID, user.DisplayName
+	liked := false
+	created.Liked = &liked
 	httpjson.Write(w, http.StatusCreated, postJSON(created))
 }
 
