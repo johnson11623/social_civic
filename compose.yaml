@@ -1,0 +1,48 @@
+name: civic
+
+services:
+  # Development database — data persists in the pgdata volume.
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-civic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-civic}
+      POSTGRES_DB: ${POSTGRES_DB:-civic}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Throwaway test database — in-memory, durability off, recreated on every test run.
+  postgres-test:
+    profiles: ["test"]
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: civic
+      POSTGRES_PASSWORD: civic
+      POSTGRES_DB: civic_test
+    command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
+    ports:
+      - "127.0.0.1:${POSTGRES_TEST_PORT:-55433}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  # golang-migrate CLI, so nobody needs it installed locally.
+  migrate:
+    profiles: ["tools"]
+    image: migrate/migrate:v4.18.1
+    volumes:
+      - ./db/migrations:/migrations
+
+volumes:
+  pgdata:
