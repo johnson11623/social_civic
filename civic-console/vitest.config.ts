@@ -8,7 +8,11 @@ export default defineConfig({
 	plugins: [viteReact()],
 	test: {
 		environment: "jsdom",
-		include: ["src/**/*.test.{ts,tsx}", "tests/unit/**/*.test.{ts,tsx}"],
+		include: [
+			"src/**/*.test.{ts,tsx}",
+			"tests/unit/**/*.test.{ts,tsx}",
+			"tests/integration/**/*.test.{ts,tsx}",
+		],
 		setupFiles: ["./tests/setup.ts"],
 		css: false,
 		coverage: {

@@ -1,0 +1,13 @@
+diff --git a/src/ssr-api-client.ts b/src/ssr-api-client.ts
+index 25c6026260260b7de90d3ab0c0a594fa8d659deb..587f06a749ebc0b9ab94ce351001a70c12f9439d 100644
+--- a/src/ssr-api-client.ts
++++ b/src/ssr-api-client.ts
+@@ -83,7 +83,7 @@ const getForwardedHeaders: Effect.Effect<Record<string, string>> = Effect.try({
+     const raw = getRequestHeaders();
+     return raw instanceof globalThis.Headers
+       ? Object.fromEntries(raw.entries())
+-      : ((raw ?? {}) as Record<string, string>);
++      : ((raw ?? {}) as unknown as Record<string, string>);
+   },
+   catch: () => ({}) as Record<string, string>,
+ }).pipe(Effect.catchAll(() => Effect.succeed({} as Record<string, string>)));
