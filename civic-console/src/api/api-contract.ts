@@ -6,10 +6,12 @@
  * snake_case like the Go API; TypeScript sees camelCase via Schema.fromKey.
  *
  * Client-safe: imported by both runtimes. No server-only code here.
- * Groups for posts, moderation and billing are added with their backends.
+ * Groups for moderation and billing are added with their backends.
  */
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "@effect/platform";
 import { Schema } from "effect";
+
+import { MAX_POST_LENGTH } from "@/lib/limits";
 
 // ---- Errors (mirroring the Go API's RFC 7807 codes) -----------------------
 
@@ -233,10 +235,150 @@ export class AuthGroup extends HttpApiGroup.make("auth")
 	)
 	.add(HttpApiEndpoint.post("logout", "/auth/logout").addSuccess(Session)) {}
 
+// ---- Posts, feed, channels (W1.4) ------------------------------------------------
+
+export const Author = Schema.Struct({
+	publicId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("public_id")),
+	displayName: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("display_name")),
+});
+
+/** The Go API numbers levels 1 (ward) to 4 (national). */
+export const LevelFromInt = Schema.transform(Schema.Literal(1, 2, 3, 4), Level, {
+	strict: true,
+	decode: (n) => (({ 1: "ward", 2: "constituency", 3: "county", 4: "national" }) as const)[n],
+	encode: (l) => (({ ward: 1, constituency: 2, county: 3, national: 4 }) as const)[l],
+});
+
+export const PostCounts = Schema.Struct({ likes: Schema.Int, replies: Schema.Int });
+
+/** A sponsored post's immutable disclosure; both languages are always shown. */
+export const SponsorLabel = Schema.Struct({ en: Schema.String, sw: Schema.String });
+
+export const PostState = Schema.Literal("active", "frozen", "tombstoned");
+
+export const Post = Schema.Struct({
+	postId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("post_id")),
+	channelId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("channel_id")),
+	channel: Schema.optionalWith(Schema.String, { exact: true }),
+	level: LevelFromInt,
+	wardId: Schema.propertySignature(Schema.Int).pipe(Schema.fromKey("ward_id")),
+	/** Null once the post is removed. */
+	content: Schema.NullOr(Schema.String),
+	score: Schema.Number,
+	state: PostState,
+	author: Schema.optionalWith(Author, { exact: true }),
+	counts: PostCounts,
+	liked: Schema.optionalWith(Schema.Boolean, { exact: true }),
+	sponsored: Schema.Boolean,
+	sponsoredLabel: Schema.optionalWith(SponsorLabel, { exact: true }).pipe(Schema.fromKey("sponsored_label")),
+	rootId: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("root_id")),
+	parentId: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("parent_id")),
+	createdAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("created_at")),
+});
+export type Post = typeof Post.Type;
+
+export const FeedLevel = Schema.Literal("all", "ward", "constituency", "county", "national");
+export type FeedLevel = typeof FeedLevel.Type;
+
+export const FeedParams = Schema.Struct({
+	level: Schema.optional(FeedLevel),
+	cursor: Schema.optional(Schema.String.pipe(Schema.maxLength(512))),
+	// A string from the browser's query; a number from SSR, whose direct
+	// handler calls skip URL encoding (effect-tanstack-start).
+	limit: Schema.optional(
+		Schema.Union(Schema.NumberFromString, Schema.Number).pipe(Schema.int(), Schema.between(1, 50)),
+	),
+});
+
+export const FeedPage = Schema.Struct({
+	items: Schema.Array(Post),
+	nextCursor: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("next_cursor")),
+	hasMore: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("has_more")),
+});
+export type FeedPage = typeof FeedPage.Type;
+
+export const ChannelCategory = Schema.Literal("general", "services", "opportunities", "safety", "culture");
+
+export const Channel = Schema.Struct({
+	channelId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("channel_id")),
+	wardId: Schema.propertySignature(Schema.Int).pipe(Schema.fromKey("ward_id")),
+	name: Schema.String,
+	description: Schema.optionalWith(Schema.String, { exact: true }),
+	category: ChannelCategory,
+	readOnly: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("read_only")),
+});
+export type Channel = typeof Channel.Type;
+
+export const ChannelList = Schema.Struct({
+	wardId: Schema.propertySignature(Schema.Int).pipe(Schema.fromKey("ward_id")),
+	items: Schema.Array(Channel),
+});
+export type ChannelList = typeof ChannelList.Type;
+
+export const LikeState = Schema.Struct({
+	postId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("post_id")),
+	likes: Schema.Int,
+	liked: Schema.Boolean,
+});
+export type LikeState = typeof LikeState.Type;
+
+const PostPath = Schema.Struct({ postId: Schema.String });
+
+export class PostsGroup extends HttpApiGroup.make("posts")
+	.add(
+		HttpApiEndpoint.get("feed", "/feed")
+			.setUrlParams(FeedParams)
+			.addSuccess(FeedPage)
+			.addError(Unauthorized)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.get("channels", "/channels")
+			.addSuccess(ChannelList)
+			.addError(Unauthorized)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("createPost", "/channels/:channelId/posts")
+			.setPath(Schema.Struct({ channelId: Schema.String }))
+			.setPayload(Schema.Struct({ content: Schema.String.pipe(Schema.maxLength(MAX_POST_LENGTH * 2)) }))
+			.addSuccess(Post, { status: 201 })
+			.addError(Unauthorized)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("like", "/posts/:postId/likes")
+			.setPath(PostPath)
+			.addSuccess(LikeState, { status: 201 })
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.del("unlike", "/posts/:postId/likes")
+			.setPath(PostPath)
+			.addSuccess(LikeState)
+			.addError(Unauthorized)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	) {}
+
 // ---- Contract -----------------------------------------------------------------
 
 export class ApiContract extends HttpApi.make("civic")
 	.add(SystemGroup)
 	.add(BoundaryGroup)
 	.add(AuthGroup)
+	.add(PostsGroup)
 	.prefix("/api") {}

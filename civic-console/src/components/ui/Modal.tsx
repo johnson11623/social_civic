@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
 
+import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n/I18nProvider";
 
 type Props = {
@@ -7,6 +8,8 @@ type Props = {
 	onClose: () => void;
 	title: string;
 	children: ReactNode;
+	/** Fill the screen below the md breakpoint (e.g. the composer on phones). */
+	fullScreenOnMobile?: boolean;
 };
 
 /**
@@ -14,7 +17,7 @@ type Props = {
  * closes on Escape and makes the page behind inert; focus returns to the
  * element that opened it.
  */
-export function Modal({ open, onClose, title, children }: Props) {
+export function Modal({ open, onClose, title, children, fullScreenOnMobile = false }: Props) {
 	const { t } = useT();
 	const ref = useRef<HTMLDialogElement>(null);
 	const titleId = useId();
@@ -41,7 +44,11 @@ export function Modal({ open, onClose, title, children }: Props) {
 			aria-labelledby={titleId}
 			onClose={onClose}
 			onCancel={onClose}
-			className="m-auto w-full max-w-lg rounded-lg border border-border bg-paper p-0 text-ink shadow-lg backdrop:bg-kenya-black/50"
+			className={cn(
+				"m-auto w-full max-w-lg rounded-lg border border-border bg-paper p-0 text-ink shadow-lg backdrop:bg-kenya-black/50",
+				fullScreenOnMobile &&
+					"max-md:h-dvh max-md:max-h-none max-md:max-w-none max-md:rounded-none max-md:border-0",
+			)}
 		>
 			{open && (
 				<div className="flex flex-col gap-4 p-6">

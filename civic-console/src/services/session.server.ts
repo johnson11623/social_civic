@@ -109,11 +109,18 @@ export const currentSession = Effect.map(HttpServerRequest.HttpServerRequest, (r
 /**
  * The browser's IP for the Go API's per-IP rate limits. The Go API must be
  * configured to trust X-Forwarded-For from this BFF (not yet: see README).
+ *
+ * During SSR the handlers run on a synthetic request with no socket, so
+ * remoteAddress is absent (not Option.none); the forwarded browser headers
+ * are all there is.
  */
-export const clientIp = Effect.map(
-	HttpServerRequest.HttpServerRequest,
-	(req) => Option.getOrUndefined(req.remoteAddress) ?? req.headers["x-forwarded-for"]?.split(",")[0]?.trim(),
-);
+export const clientIp = Effect.map(HttpServerRequest.HttpServerRequest, (req) => {
+	const remote = (req as { remoteAddress?: Option.Option<string> }).remoteAddress;
+	return (
+		(remote ? Option.getOrUndefined(remote) : undefined) ??
+		req.headers["x-forwarded-for"]?.split(",")[0]?.trim()
+	);
+});
 
 // ---- Refresh (T-W1.3.2.3) ------------------------------------------------------
 

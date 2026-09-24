@@ -11,7 +11,11 @@ import { Effect, Layer, Schema } from "effect";
 import {
 	ApiContract,
 	BoundaryTree,
+	ChannelList,
+	FeedPage,
 	Group,
+	LikeState,
+	Post,
 	SearchResponse,
 	type Session,
 	Unauthorized,
@@ -20,6 +24,7 @@ import {
 import { isLang, LANG_COOKIE } from "@/lib/i18n/lang";
 import { Backend } from "@/services/backend.server";
 import {
+	ACCESS_COOKIE,
 	clearSessionCookies,
 	clientIp,
 	currentSession,
@@ -44,6 +49,19 @@ const acceptLanguage = Effect.map(HttpServerRequest.HttpServerRequest, (req) => 
 
 /** Options every proxied call carries: language and the browser's IP. */
 const callerContext = Effect.all({ acceptLanguage, forwardedFor: clientIp });
+
+/**
+ * The signed-in caller's access token, from the httpOnly session cookie.
+ * An expired token is refreshed by the browser's SessionKeeper; the Go API's
+ * 401 comes back as Unauthorized meanwhile.
+ */
+const bearer = Effect.flatMap(HttpServerRequest.HttpServerRequest, (req) => {
+	const token = req.cookies[ACCESS_COOKIE];
+	return token ? Effect.succeed(token) : Effect.fail(new Unauthorized({ code: "no_session", detail: "" }));
+});
+
+/** Caller context plus the bearer token, for authenticated platform calls. */
+const authedContext = Effect.all({ acceptLanguage, forwardedFor: clientIp, bearer });
 
 const SystemLive = HttpApiBuilder.group(ApiContract, "system", (handlers) =>
 	handlers.handle("health", () =>
@@ -193,6 +211,68 @@ const AuthLive = HttpApiBuilder.group(ApiContract, "auth", (handlers) =>
 		),
 );
 
+const PostsLive = HttpApiBuilder.group(ApiContract, "posts", (handlers) =>
+	handlers
+		.handle("feed", ({ urlParams }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get("/v1/feed", FeedPage, { urlParams, ...(yield* authedContext) });
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "ValidationFailed", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("channels", () =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get("/v1/channels", ChannelList, yield* authedContext);
+			}).pipe(
+				Effect.catchTags(narrowTo("Unauthorized", "RateLimited", "BackendUnavailable", "UpstreamError")),
+			),
+		)
+		.handle("createPost", ({ path, payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post(`/v1/channels/${encodeURIComponent(path.channelId)}/posts`, Post, {
+					...(yield* authedContext),
+					body: { content: payload.content },
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "ValidationFailed", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("like", ({ path }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post(
+					`/v1/posts/${encodeURIComponent(path.postId)}/likes`,
+					LikeState,
+					yield* authedContext,
+				);
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "Conflict", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("unlike", ({ path }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.request(
+					"DELETE",
+					`/v1/posts/${encodeURIComponent(path.postId)}/likes`,
+					LikeState,
+					yield* authedContext,
+				);
+			}).pipe(
+				Effect.catchTags(narrowTo("Unauthorized", "RateLimited", "BackendUnavailable", "UpstreamError")),
+			),
+		),
+);
+
 /**
  * Keep the errors an endpoint declares; report any other platform error as
  * UpstreamError so the contract's error types stay exact.
@@ -231,5 +311,5 @@ function narrowTo<const K extends Tag>(...keep: K[]) {
 }
 
 export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(
-	Layer.provide([SystemLive, BoundaryLive, AuthLive]),
+	Layer.provide([SystemLive, BoundaryLive, AuthLive, PostsLive]),
 );

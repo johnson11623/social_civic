@@ -3,6 +3,7 @@ import { lazy, type ReactNode, Suspense } from "react";
 
 import { SessionKeeper } from "@/components/auth/SessionKeeper";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { ToastProvider } from "@/components/ui/Toast";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { translate } from "@/lib/i18n/messages";
 import { resolveLang } from "@/lib/i18n/resolve-lang";
@@ -42,9 +43,11 @@ function RootDocument({ children }: { children: ReactNode }) {
 			</head>
 			<body className="bg-paper text-ink" suppressHydrationWarning>
 				<I18nProvider initialLang={lang}>
-					<SiteHeader />
-					{children}
-					<SessionKeeper />
+					<ToastProvider>
+						<SiteHeader />
+						{children}
+						<SessionKeeper />
+					</ToastProvider>
 				</I18nProvider>
 				<Suspense>
 					<Devtools />
