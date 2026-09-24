@@ -1,10 +1,11 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import type { Session } from "@/api/api-contract";
 import { Button, button } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n/messages";
+import { useLogout } from "@/lib/use-logout";
 import { callApiPromise } from "@/runtimes/get-runtime";
 
 export const Route = createFileRoute("/")({
@@ -57,26 +58,29 @@ function Landing() {
 
 function SignedIn() {
 	const { t } = useT();
-	const router = useRouter();
+	const logout = useLogout();
 	const [busy, setBusy] = useState(false);
 	return (
 		<section className="flex max-w-2xl flex-col gap-4">
 			<h1 className="text-h1">{t("landing.welcome")}</h1>
 			<p className="text-body">{t("landing.signedIn")}</p>
 			<p className="text-body text-muted">{t("landing.feedSoon")}</p>
-			<Button
-				variant="secondary"
-				className="w-fit"
-				disabled={busy}
-				onClick={async () => {
-					setBusy(true);
-					await callApiPromise((api) => api.auth.logout()).catch(() => undefined);
-					await router.invalidate();
-					setBusy(false);
-				}}
-			>
-				{t("landing.logout")}
-			</Button>
+			<div className="flex flex-wrap gap-3">
+				<Link to="/account" className={button({ variant: "secondary" })}>
+					{t("account.link")}
+				</Link>
+				<Button
+					variant="ghost"
+					disabled={busy}
+					onClick={async () => {
+						setBusy(true);
+						await logout();
+						setBusy(false);
+					}}
+				>
+					{t("landing.logout")}
+				</Button>
+			</div>
 		</section>
 	);
 }

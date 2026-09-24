@@ -8,13 +8,16 @@
  * on every call that acts on it.
  */
 import { HttpApp, HttpServerRequest, HttpServerResponse } from "@effect/platform";
-import { Config, Effect, Option, Schema } from "effect";
+import { Config, Effect, type Either, Option, Runtime, Schema } from "effect";
 
 import type { Session } from "@/api/api-contract";
+import { SESSION_HINT_COOKIE } from "@/lib/session-hint";
+import { Backend, type BackendError, type RequestOptions } from "./backend.server";
 
 export const ACCESS_COOKIE = "civic_at";
 export const REFRESH_COOKIE = "civic_rt";
 const REFRESH_PATH = "/api/auth";
+const REFRESH_TTL = "30 days";
 
 /** Token pair as returned by the Go API's login and refresh endpoints. */
 export const GoTokens = Schema.Struct({
@@ -72,7 +75,15 @@ export const setSessionCookies = (tokens: GoTokens) =>
 						secure,
 						sameSite: "strict",
 						path: REFRESH_PATH,
-						maxAge: "30 days",
+						maxAge: REFRESH_TTL,
+					}),
+					// Not a secret: tells the browser a refreshable session exists, so it
+					// only calls the refresh endpoint when there is something to refresh.
+					HttpServerResponse.unsafeSetCookie(SESSION_HINT_COOKIE, "1", {
+						secure,
+						sameSite: "lax",
+						path: "/",
+						maxAge: REFRESH_TTL,
 					}),
 				),
 			),
@@ -85,6 +96,7 @@ export const clearSessionCookies = HttpApp.appendPreResponseHandler((_req, res) 
 		res.pipe(
 			HttpServerResponse.expireCookie(ACCESS_COOKIE, { path: "/" }),
 			HttpServerResponse.expireCookie(REFRESH_COOKIE, { path: REFRESH_PATH }),
+			HttpServerResponse.expireCookie(SESSION_HINT_COOKIE, { path: "/" }),
 		),
 	),
 );
@@ -102,3 +114,40 @@ export const clientIp = Effect.map(
 	HttpServerRequest.HttpServerRequest,
 	(req) => Option.getOrUndefined(req.remoteAddress) ?? req.headers["x-forwarded-for"]?.split(",")[0]?.trim(),
 );
+
+// ---- Refresh (T-W1.3.2.3) ------------------------------------------------------
+
+/**
+ * The Go API rotates refresh tokens and treats a second use of a rotated
+ * token as theft (every session revoked). Two tabs refreshing at once would
+ * trip that, so refreshes are single-flight per token, and the result is
+ * reused for requests that arrive with the same old token shortly after.
+ *
+ * In-memory: correct for one BFF instance. Several instances need a shared
+ * store (Redis) keyed by a hash of the token.
+ */
+const REUSE_WINDOW_MS = 30_000;
+const inflight = new Map<string, { at: number; result: Promise<Either.Either<GoTokens, BackendError>> }>();
+
+export const refreshTokens = (refreshToken: string, context: RequestOptions = {}) =>
+	Effect.gen(function* () {
+		const now = Date.now();
+		for (const [key, entry] of inflight) if (now - entry.at > REUSE_WINDOW_MS) inflight.delete(key);
+
+		let entry = inflight.get(refreshToken);
+		if (!entry) {
+			const backend = yield* Backend;
+			const runtime = yield* Effect.runtime<never>();
+			const call = backend.post("/v1/auth/refresh", GoTokens, {
+				...context,
+				body: { refresh_token: refreshToken },
+			});
+			entry = { at: now, result: Runtime.runPromise(runtime)(Effect.either(call)) };
+			inflight.set(refreshToken, entry);
+		}
+		const pending = entry.result;
+		return yield* Effect.flatten(Effect.promise(() => pending));
+	});
+
+/** Test hook: forget in-flight refreshes. */
+export const resetRefreshCache = () => inflight.clear();

@@ -183,6 +183,8 @@ export const Session = Schema.Struct({
 	subject: Schema.optionalWith(Schema.String, { exact: true }),
 	scope: Schema.optionalWith(Scope, { exact: true }),
 	expiresAt: Schema.optionalWith(Schema.Int, { exact: true }),
+	/** True when this response rotated the tokens (the access token had expired). */
+	refreshed: Schema.optionalWith(Schema.Boolean, { exact: true }),
 });
 export type Session = typeof Session.Type;
 
@@ -219,7 +221,16 @@ export class AuthGroup extends HttpApiGroup.make("auth")
 			.addError(BackendUnavailable)
 			.addError(UpstreamError),
 	)
+	// Refreshes automatically when the access token has expired.
 	.add(HttpApiEndpoint.get("session", "/auth/session").addSuccess(Session))
+	.add(
+		HttpApiEndpoint.post("refresh", "/auth/refresh")
+			.addSuccess(Session)
+			.addError(Unauthorized)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
 	.add(HttpApiEndpoint.post("logout", "/auth/logout").addSuccess(Session)) {}
 
 // ---- Contract -----------------------------------------------------------------

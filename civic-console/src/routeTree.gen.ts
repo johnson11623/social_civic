@@ -10,13 +10,19 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as JoinRouteImport } from './routes/join'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthedAccountRouteImport } from './routes/_authed/account'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JoinRoute = JoinRouteImport.update({
@@ -29,6 +35,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedAccountRoute = AuthedAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
   id: '/api/$',
   path: '/api/$',
@@ -39,31 +50,43 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
+  '/account': typeof AuthedAccountRoute
   '/api/$': typeof ApiSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
+  '/account': typeof AuthedAccountRoute
   '/api/$': typeof ApiSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authed': typeof AuthedRouteWithChildren
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
+  '/_authed/account': typeof AuthedAccountRoute
   '/api/$': typeof ApiSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/join' | '/login' | '/api/$'
+  fullPaths: '/' | '/join' | '/login' | '/account' | '/api/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/join' | '/login' | '/api/$'
-  id: '__root__' | '/' | '/join' | '/login' | '/api/$'
+  to: '/' | '/join' | '/login' | '/account' | '/api/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authed'
+    | '/join'
+    | '/login'
+    | '/_authed/account'
+    | '/api/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthedRoute: typeof AuthedRouteWithChildren
   JoinRoute: typeof JoinRoute
   LoginRoute: typeof LoginRoute
   ApiSplatRoute: typeof ApiSplatRoute
@@ -76,6 +99,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/join': {
@@ -92,6 +122,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/account': {
+      id: '/_authed/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AuthedAccountRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/api/$': {
       id: '/api/$'
       path: '/api/$'
@@ -102,8 +139,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthedRouteChildren {
+  AuthedAccountRoute: typeof AuthedAccountRoute
+}
+
+const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedAccountRoute: AuthedAccountRoute,
+}
+
+const AuthedRouteWithChildren =
+  AuthedRoute._addFileChildren(AuthedRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthedRoute: AuthedRouteWithChildren,
   JoinRoute: JoinRoute,
   LoginRoute: LoginRoute,
   ApiSplatRoute: ApiSplatRoute,

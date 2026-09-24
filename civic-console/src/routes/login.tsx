@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { NationalIdInput } from "@/components/civic/NationalIdInput";
@@ -6,16 +6,22 @@ import { CodeStep, RESEND_AFTER_SECONDS } from "@/components/join/CodeStep";
 import { Button } from "@/components/ui/Button";
 import { describeError } from "@/lib/api-errors";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { safeRedirect } from "@/lib/session";
 import { isNationalId } from "@/lib/validation";
 import { callApiEither } from "@/runtimes/get-runtime";
 
-export const Route = createFileRoute("/login")({ component: Login });
+export const Route = createFileRoute("/login")({
+	// ?redirect= is where the guard came from; sanitized before use.
+	validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
+		typeof search.redirect === "string" ? { redirect: search.redirect } : {},
+	component: Login,
+});
 
 /** T-W1.3.2.1 — log in with national ID + SMS code. */
 function Login() {
 	const { t } = useT();
-	const navigate = useNavigate();
 	const router = useRouter();
+	const { redirect: next } = Route.useSearch();
 	const [nationalId, setNationalId] = useState("");
 	const [touched, setTouched] = useState(false);
 	const [step, setStep] = useState<"id" | "code">("id");
@@ -47,7 +53,7 @@ function Login() {
 		setBusy(false);
 		if (r._tag === "Right") {
 			await router.invalidate();
-			await navigate({ to: "/" });
+			await router.history.push(safeRedirect(next));
 			return;
 		}
 		const e = r.left as { _tag?: string };

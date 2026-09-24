@@ -1,6 +1,7 @@
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense } from "react";
 
+import { SessionKeeper } from "@/components/auth/SessionKeeper";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { translate } from "@/lib/i18n/messages";
@@ -43,6 +44,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 				<I18nProvider initialLang={lang}>
 					<SiteHeader />
 					{children}
+					<SessionKeeper />
 				</I18nProvider>
 				<Suspense>
 					<Devtools />

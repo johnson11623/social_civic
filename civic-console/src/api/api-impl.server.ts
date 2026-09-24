@@ -14,6 +14,7 @@ import {
 	Group,
 	SearchResponse,
 	type Session,
+	Unauthorized,
 	UpstreamError,
 } from "@/api/api-contract";
 import { isLang, LANG_COOKIE } from "@/lib/i18n/lang";
@@ -23,9 +24,13 @@ import {
 	clientIp,
 	currentSession,
 	GoTokens,
+	REFRESH_COOKIE,
+	refreshTokens,
 	sessionFromAccessToken,
 	setSessionCookies,
 } from "@/services/session.server";
+
+const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 /**
  * Language to request from the Go API: the user's explicit choice (`lang`
@@ -130,14 +135,56 @@ const AuthLive = HttpApiBuilder.group(ApiContract, "auth", (handlers) =>
 					body: { national_id: payload.nationalId, otp: payload.otp },
 				});
 				yield* setSessionCookies(tokens);
-				return sessionFromAccessToken(tokens.access_token, Math.floor(Date.now() / 1000));
+				return sessionFromAccessToken(tokens.access_token, nowSeconds());
 			}).pipe(
 				Effect.catchTags(
 					narrowTo("InvalidInput", "Unauthorized", "RateLimited", "BackendUnavailable", "UpstreamError"),
 				),
 			),
 		)
-		.handle("session", () => currentSession)
+		.handle("session", () =>
+			Effect.gen(function* () {
+				const session = yield* currentSession;
+				if (session.authenticated) return session;
+				const req = yield* HttpServerRequest.HttpServerRequest;
+				const refreshToken = req.cookies[REFRESH_COOKIE];
+				// civic_rt is only sent to /api/auth/*, so this refreshes for browser
+				// calls; SSR of pages sees an anonymous session and the browser's
+				// SessionKeeper takes over.
+				if (!refreshToken) return session;
+				return yield* refreshTokens(refreshToken, yield* callerContext).pipe(
+					Effect.flatMap((tokens) =>
+						Effect.as(setSessionCookies(tokens), {
+							...sessionFromAccessToken(tokens.access_token, nowSeconds()),
+							refreshed: true,
+						}),
+					),
+					Effect.catchAll((e) =>
+						// Rejected (expired, revoked, reused): end the session. Transient
+						// failures keep the cookies so the next attempt can succeed.
+						e._tag === "Unauthorized"
+							? Effect.as(clearSessionCookies, { authenticated: false } satisfies Session)
+							: Effect.succeed({ authenticated: false } satisfies Session),
+					),
+				);
+			}),
+		)
+		.handle("refresh", () =>
+			Effect.gen(function* () {
+				const req = yield* HttpServerRequest.HttpServerRequest;
+				const refreshToken = req.cookies[REFRESH_COOKIE];
+				if (!refreshToken) {
+					return yield* new Unauthorized({ code: "no_session", detail: "" });
+				}
+				const tokens = yield* refreshTokens(refreshToken, yield* callerContext).pipe(
+					Effect.tapErrorTag("Unauthorized", () => clearSessionCookies),
+				);
+				yield* setSessionCookies(tokens);
+				return { ...sessionFromAccessToken(tokens.access_token, nowSeconds()), refreshed: true };
+			}).pipe(
+				Effect.catchTags(narrowTo("Unauthorized", "RateLimited", "BackendUnavailable", "UpstreamError")),
+			),
+		)
 		.handle("logout", () =>
 			Effect.gen(function* () {
 				yield* clearSessionCookies;

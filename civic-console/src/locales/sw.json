@@ -100,5 +100,9 @@
 	"login.lead": "Weka nambari yako ya kitambulisho. Tutatuma msimbo kwa simu uliyosajili.",
 	"login.noAccount": "Mgeni hapa?",
 	"login.sendCode": "Tuma msimbo",
-	"join.identity.reveal": "Onyesha nambari ya kitambulisho"
+	"join.identity.reveal": "Onyesha nambari ya kitambulisho",
+	"auth.checking": "Inakagua kipindi chako…",
+	"account.title": "Akaunti yako",
+	"account.body": "Umeingia kwenye Jukwaa la Kiraia. Mipangilio ya wasifu, faragha na idhini itaonekana hapa.",
+	"account.link": "Akaunti yako"
 }

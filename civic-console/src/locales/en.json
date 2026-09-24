@@ -100,5 +100,9 @@
 	"login.lead": "Enter your national ID. We'll send a code to the phone you registered.",
 	"login.noAccount": "New here?",
 	"login.sendCode": "Send code",
-	"join.identity.reveal": "Show national ID number"
+	"join.identity.reveal": "Show national ID number",
+	"auth.checking": "Checking your session…",
+	"account.title": "Your account",
+	"account.body": "You're signed in to the Civic Platform. Profile, privacy and consent settings will appear here.",
+	"account.link": "Your account"
 }
