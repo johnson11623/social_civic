@@ -57,6 +57,18 @@ services:
       timeout: 5s
       retries: 30
 
+  # Cache and rate-limit counters. Ephemeral by design: no persistence.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   # golang-migrate CLI, so nobody needs it installed locally.
   migrate:
     profiles: ["tools"]

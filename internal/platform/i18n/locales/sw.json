@@ -11,6 +11,7 @@
 
   "error.malformed_json": "Ombi lazima liwe kitu kimoja cha JSON chenye sehemu zinazojulikana pekee.",
   "error.validation_failed": "Sehemu moja au zaidi si sahihi.",
+  "error.rate_limited": "Majaribio mengi mno. Tafadhali subiri kabla ya kujaribu tena.",
   "error.internal": "Hitilafu imetokea. Tafadhali jaribu tena.",
 
   "identity.invalid_id": "Nambari ya kitambulisho cha taifa lazima iwe na tarakimu 8.",

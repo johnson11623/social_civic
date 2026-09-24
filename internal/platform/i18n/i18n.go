@@ -39,6 +39,7 @@ const (
 	MsgMalformedJSON    Key = "error.malformed_json"
 	MsgValidationFailed Key = "error.validation_failed"
 	MsgInternal         Key = "error.internal"
+	MsgRateLimited      Key = "error.rate_limited"
 
 	MsgInvalidNationalID       Key = "identity.invalid_id"
 	MsgConsentRequired         Key = "identity.consent_required"

@@ -15,12 +15,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/johnson11623/social_civic/internal/boundary"
 	"github.com/johnson11623/social_civic/internal/identity"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
+	"github.com/johnson11623/social_civic/internal/platform/i18n"
+	"github.com/johnson11623/social_civic/internal/platform/problem"
 	"github.com/johnson11623/social_civic/internal/platform/requestid"
 	"github.com/johnson11623/social_civic/pkg/kms"
+	"github.com/johnson11623/social_civic/pkg/ratelimit"
 )
 
 type config struct {
@@ -30,6 +34,8 @@ type config struct {
 	JWTSigningKey string
 	Pepper        string
 	PepperVersion string
+	RedisURL      string
+	RateLimitKey  string
 }
 
 func loadConfig() (config, error) {
@@ -40,6 +46,8 @@ func loadConfig() (config, error) {
 		JWTSigningKey: os.Getenv("JWT_SIGNING_KEY"),
 		Pepper:        os.Getenv("NATIONAL_ID_PEPPER"),
 		PepperVersion: getenv("NATIONAL_ID_PEPPER_VERSION", "v1"),
+		RedisURL:      os.Getenv("REDIS_URL"),
+		RateLimitKey:  os.Getenv("RATE_LIMIT_KEY"),
 	}
 	switch {
 	case c.DatabaseURL == "":
@@ -48,6 +56,10 @@ func loadConfig() (config, error) {
 		return c, errors.New("JWT_SIGNING_KEY is required")
 	case c.Pepper == "":
 		return c, errors.New("NATIONAL_ID_PEPPER is required")
+	case c.RedisURL == "":
+		return c, errors.New("REDIS_URL is required")
+	case len(c.RateLimitKey) < 32:
+		return c, errors.New("RATE_LIMIT_KEY is required (at least 32 bytes)")
 	}
 	// F-01: the env-based pepper and static keyring are for development only.
 	if c.Env == "production" {
@@ -89,6 +101,23 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("ping database: %w", err)
 	}
 
+	redisOpts, err := redis.ParseURL(cfg.RedisURL)
+	if err != nil {
+		return fmt.Errorf("parse REDIS_URL: %w", err)
+	}
+	rdb := redis.NewClient(redisOpts)
+	defer rdb.Close()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("ping redis: %w", err)
+	}
+	limiter := &ratelimit.Redis{Client: rdb}
+	tooManyRequests := func(w http.ResponseWriter, r *http.Request) {
+		problem.Write(w, r, http.StatusTooManyRequests, "rate_limited", i18n.MsgRateLimited)
+	}
+	byIP := ratelimit.ByClientIP([]byte(cfg.RateLimitKey))
+	// API Spec §1.6 rate class "auth": 5 registrations per IP per hour (T-1.1.1.10).
+	registerLimit := ratelimit.Middleware(limiter, ratelimit.Rule{Name: "register", Limit: 5, Window: time.Hour}, byIP, tooManyRequests, logger)
+
 	tree, err := boundary.LoadTree(ctx, pool)
 	if err != nil {
 		return err
@@ -119,7 +148,7 @@ func run(logger *slog.Logger) error {
 	})
 	r.Get("/v1/boundary/tree", boundaryAPI.GetTree)
 	r.Get("/v1/boundary/search", boundaryAPI.Search)
-	r.Method(http.MethodPost, "/v1/auth/register", register)
+	r.With(registerLimit).Method(http.MethodPost, "/v1/auth/register", register)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
