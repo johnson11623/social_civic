@@ -1,5 +1,5 @@
 {
-	"app.name": "Civic Platform",
+	"app.name": "Civic",
 	"app.tagline": "Ward · Constituency · County · National",
 	"language.label": "Language",
 	"language.en": "English",
@@ -37,7 +37,7 @@
 	"landing.point.elevation": "See why posts rise — every score is explained",
 	"landing.point.safety": "Harm-based moderation you can appeal",
 	"landing.logout": "Log out",
-	"join.title": "Join the Civic Platform",
+	"join.title": "Join Civic",
 	"join.step": "Step {current} of {total}: {name}",
 	"join.consent.name": "Consent",
 	"join.consent.heading": "Before you begin",
@@ -306,5 +306,6 @@
 	"account.erasureDone": "Your account is being deleted. It will be complete by {date}.",
 	"account.erasureKept": "What we keep, and why:",
 	"account.erasureHome": "Go to the home page",
-	"common.cancel": "Cancel"
+	"common.cancel": "Cancel",
+	"footer.language": "Language"
 }

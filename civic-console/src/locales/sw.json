@@ -1,5 +1,5 @@
 {
-	"app.name": "Jukwaa la Kiraia",
+	"app.name": "Kiraia",
 	"app.tagline": "Wadi · Eneo Bunge · Kaunti · Taifa",
 	"language.label": "Lugha",
 	"language.en": "English",
@@ -37,7 +37,7 @@
 	"landing.point.elevation": "Ona kwa nini machapisho hupanda — kila alama inaelezwa",
 	"landing.point.safety": "Udhibiti unaozingatia madhara, unaoweza kukata rufaa",
 	"landing.logout": "Toka",
-	"join.title": "Jiunge na Jukwaa la Kiraia",
+	"join.title": "Jiunge na Kiraia",
 	"join.step": "Hatua {current} kati ya {total}: {name}",
 	"join.consent.name": "Idhini",
 	"join.consent.heading": "Kabla hujaanza",
@@ -306,5 +306,6 @@
 	"account.erasureDone": "Akaunti yako inafutwa. Itakamilika kufikia {date}.",
 	"account.erasureKept": "Tunachohifadhi, na kwa nini:",
 	"account.erasureHome": "Nenda ukurasa wa nyumbani",
-	"common.cancel": "Ghairi"
+	"common.cancel": "Ghairi",
+	"footer.language": "Lugha"
 }

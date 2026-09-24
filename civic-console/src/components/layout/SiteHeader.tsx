@@ -1,10 +1,17 @@
 import { Link } from "@tanstack/react-router";
 
-import { LanguageToggle } from "@/components/civic/LanguageToggle";
+import { Avatar } from "@/components/ui/Avatar";
+import { button } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n/I18nProvider";
 
-/** Top bar on every screen: skip link (T-X.7), brand, language toggle. */
-export function SiteHeader() {
+/** The signed-in user, for the header; null when signed out. */
+export type HeaderUser = { displayName: string } | null;
+
+/**
+ * Top bar on every screen: skip link (T-X.7), brand, and the account: the
+ * user's avatar (to the account page) when signed in, "Log in" otherwise.
+ */
+export function SiteHeader({ user }: { user: HeaderUser }) {
 	const { t } = useT();
 	return (
 		<header className="border-b border-border bg-paper">
@@ -23,7 +30,20 @@ export function SiteHeader() {
 					</span>
 					{t("app.name")}
 				</Link>
-				<LanguageToggle />
+				{user ? (
+					<Link
+						to="/account"
+						aria-label={t("account.link")}
+						activeProps={{ "aria-current": "page" }}
+						className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent"
+					>
+						<Avatar name={user.displayName || "?"} size="sm" />
+					</Link>
+				) : (
+					<Link to="/login" className={button({ variant: "secondary", size: "sm" })}>
+						{t("landing.login")}
+					</Link>
+				)}
 			</div>
 		</header>
 	);

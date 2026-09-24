@@ -39,11 +39,11 @@ func TOTPSecretText(secret []byte) string { return totpEncoding.EncodeToString(s
 func TOTPURI(secret []byte, account string) string {
 	q := url.Values{}
 	q.Set("secret", TOTPSecretText(secret))
-	q.Set("issuer", "Civic Platform")
+	q.Set("issuer", "Civic")
 	q.Set("algorithm", "SHA1")
 	q.Set("digits", fmt.Sprint(totpDigits))
 	q.Set("period", fmt.Sprint(int(totpStep.Seconds())))
-	return "otpauth://totp/" + url.PathEscape("Civic Platform:"+account) + "?" + q.Encode()
+	return "otpauth://totp/" + url.PathEscape("Civic:"+account) + "?" + q.Encode()
 }
 
 // totpStepAt is the RFC 6238 time step counter for t.

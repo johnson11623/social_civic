@@ -14,7 +14,7 @@ describe("landing (T-W1.3.1.1)", () => {
 		expect(screen.getByRole("link", { name: "Ingia" })).toHaveAttribute("href", "/login");
 	});
 
-	it("shows the signed-in home with log out", async () => {
+	it("shows the signed-in home without account or log-out links (they're in the header and account page)", async () => {
 		await renderWithProviders(
 			<HomeView
 				session={{ authenticated: true, subject: "u" }}
@@ -27,7 +27,8 @@ describe("landing (T-W1.3.1.1)", () => {
 			{ lang: "en" },
 		);
 		expect(await screen.findByRole("heading", { level: 1, name: "Home" })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Log out" })).toBeNull();
+		expect(screen.queryByRole("link", { name: "Your account" })).toBeNull();
 		expect(screen.getByRole("tab", { name: "Ward", selected: true })).toBeInTheDocument();
 		expect(screen.queryByRole("link", { name: "Join" })).toBeNull();
 	});

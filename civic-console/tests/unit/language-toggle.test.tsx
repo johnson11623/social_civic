@@ -27,12 +27,12 @@ describe("LanguageToggle", () => {
 			</>,
 			{ lang: "sw" },
 		);
-		expect(await screen.findByRole("heading")).toHaveTextContent("Jukwaa la Kiraia");
+		expect(await screen.findByRole("heading")).toHaveTextContent("Kiraia");
 		expect(screen.getByRole("button", { name: "Kiswahili" })).toHaveAttribute("aria-pressed", "true");
 
 		await userEvent.click(screen.getByRole("button", { name: "English" }));
 
-		await waitFor(() => expect(screen.getByRole("heading")).toHaveTextContent("Civic Platform"));
+		await waitFor(() => expect(screen.getByRole("heading")).toHaveTextContent("Civic"));
 		expect(screen.getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
 		expect(document.cookie).toContain("lang=en");
 		expect(localStorage.getItem("civic.lang")).toBe("en");

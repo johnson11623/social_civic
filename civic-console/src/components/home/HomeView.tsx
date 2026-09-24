@@ -1,13 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
 
 import type { Level, Session } from "@/api/api-contract";
 import { type HomeData, HomeFeed } from "@/components/civic/HomeFeed";
 import { WardShell } from "@/components/layout/WardShell";
-import { Button, button } from "@/components/ui/Button";
+import { button } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n/messages";
-import { useLogout } from "@/lib/use-logout";
 
 export type HomeLoaderData = { session: Session; home?: HomeData };
 
@@ -67,8 +65,6 @@ function SignedIn({
 	onLevelChange?: ((level: Level) => void) | undefined;
 }) {
 	const { t } = useT();
-	const logout = useLogout();
-	const [busy, setBusy] = useState(false);
 	return (
 		<WardShell
 			channels={home.channels}
@@ -76,26 +72,7 @@ function SignedIn({
 			isModerator={home.isModerator ?? false}
 		>
 			<div className="mx-auto flex max-w-2xl flex-col gap-4 py-6">
-				<div className="flex flex-wrap items-center justify-between gap-2">
-					<h1 className="text-h1">{t("feed.title")}</h1>
-					<div className="flex gap-1">
-						<Link to="/account" className={button({ variant: "ghost", size: "sm" })}>
-							{t("account.link")}
-						</Link>
-						<Button
-							variant="ghost"
-							size="sm"
-							disabled={busy}
-							onClick={async () => {
-								setBusy(true);
-								await logout();
-								setBusy(false);
-							}}
-						>
-							{t("landing.logout")}
-						</Button>
-					</div>
-				</div>
+				<h1 className="text-h1">{t("feed.title")}</h1>
 				<HomeFeed {...home} urlLevel={urlLevel} {...(onLevelChange ? { onLevelChange } : {})} />
 			</div>
 		</WardShell>

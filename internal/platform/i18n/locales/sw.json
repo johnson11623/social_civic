@@ -27,7 +27,7 @@
   "identity.token_expired": "Muda wa kipindi chako umeisha. Tafadhali ingia tena.",
   "identity.token_revoked": "Kipindi chako kimekomeshwa. Tafadhali ingia tena.",
   "identity.token_reuse_detected": "Kwa usalama wako, vipindi vyako vyote vimefungwa. Tafadhali ingia tena.",
-  "sms.login_code": "Nambari yako ya kuingia kwenye Jukwaa la Kiraia ni %s. Itaisha baada ya dakika %d. Usimpe mtu yeyote nambari hii.",
+  "sms.login_code": "Nambari yako ya kuingia kwenye Kiraia ni %s. Itaisha baada ya dakika %d. Usimpe mtu yeyote nambari hii.",
   "error.unauthenticated": "Tafadhali ingia ili kuendelea.",
   "identity.consent_not_found": "Hakuna idhini ya toleo hili iliyopatikana kwenye akaunti yako.",
   "identity.consent_withdrawn": "Huduma hii haipatikani kwa sababu umeondoa idhini yako.",

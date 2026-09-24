@@ -1,4 +1,4 @@
-import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
+import { Link, useNavigate, useRouteContext, useRouter } from "@tanstack/react-router";
 import { type FormEvent, type ReactNode, useId, useState } from "react";
 
 import type { Profile } from "@/api/api-contract";
@@ -100,6 +100,7 @@ const saveProfile = (payload: Update) =>
 function ProfileSection({ profile, onSaved }: { profile: Profile; onSaved: (p: Profile) => void }) {
 	const { t, lang } = useT();
 	const toast = useToast();
+	const router = useRouter();
 	const [name, setName] = useState(profile.displayName);
 	const [error, setError] = useState<string>();
 	const [busy, setBusy] = useState(false);
@@ -123,6 +124,7 @@ function ProfileSection({ profile, onSaved }: { profile: Profile; onSaved: (p: P
 		setName(res.value.displayName);
 		onSaved(res.value);
 		toast(t("account.saved"));
+		void router.invalidate(); // the header avatar shows the new initials
 	}
 
 	return (
