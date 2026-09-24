@@ -1,0 +1,37 @@
+import type { MessageKey, Vars } from "@/lib/i18n/messages";
+
+type T = (key: MessageKey, vars?: Vars) => string;
+
+/** Tagged error as it arrives from the typed API client. */
+export type ApiFailure = { readonly _tag: string; readonly detail?: string; readonly retryAfter?: number };
+
+/**
+ * A localized, user-facing message for any API failure. The platform's own
+ * `detail` is already localized (Accept-Language), so it is preferred;
+ * transport and unexpected failures get our own wording.
+ */
+export function describeError(error: unknown, t: T): string {
+	const e = (error ?? {}) as Partial<ApiFailure>;
+	switch (e._tag) {
+		case "RateLimited":
+			return t("error.rateLimited", { minutes: Math.max(1, Math.ceil((e.retryAfter ?? 60) / 60)) });
+		case "BackendUnavailable":
+			return t("error.unavailable");
+		case "InvalidInput":
+		case "Unauthorized":
+		case "Conflict":
+		case "ValidationFailed":
+			return e.detail || t("error.generic");
+		case "RequestError":
+			return t("error.offline");
+		default:
+			return t("error.generic");
+	}
+}
+
+/** Field-level codes from a ValidationFailed error, keyed by field. */
+export function fieldErrors(error: unknown): Record<string, string> {
+	const e = error as { _tag?: string; errors?: ReadonlyArray<{ field: string; code: string }> };
+	if (e?._tag !== "ValidationFailed" || !e.errors) return {};
+	return Object.fromEntries(e.errors.map((f) => [f.field, f.code]));
+}

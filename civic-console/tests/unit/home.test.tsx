@@ -4,17 +4,20 @@ import { describe, expect, it } from "vitest";
 import { HomeView } from "@/routes/index";
 import { renderWithProviders } from "../render";
 
-describe("home route", () => {
-	it("renders localized heading with token classes", async () => {
-		await renderWithProviders(<HomeView health={{ status: "ok", backend: "ok" }} />, { lang: "en" });
-		const heading = await screen.findByRole("heading", { level: 1, name: "Civic Platform" });
-		expect(heading).toHaveClass("text-display", "text-ink");
-		expect(screen.getByTestId("platform-status")).toHaveTextContent("Platform API: ok");
+describe("landing (T-W1.3.1.1)", () => {
+	it("invites visitors to join or log in, in their language", async () => {
+		await renderWithProviders(<HomeView session={{ authenticated: false }} />, { lang: "sw" });
+		expect(
+			await screen.findByRole("heading", { level: 1, name: "Wadi yako. Sauti yako." }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Jiunge" })).toHaveAttribute("href", "/join");
+		expect(screen.getByRole("link", { name: "Ingia" })).toHaveAttribute("href", "/login");
 	});
 
-	it("renders in Kiswahili", async () => {
-		await renderWithProviders(<HomeView health={{ status: "ok", backend: "unavailable" }} />, { lang: "sw" });
-		expect(await screen.findByRole("heading", { level: 1, name: "Jukwaa la Kiraia" })).toBeInTheDocument();
-		expect(screen.getByTestId("platform-status")).toHaveTextContent("API ya jukwaa: haipatikani");
+	it("shows the signed-in home with log out", async () => {
+		await renderWithProviders(<HomeView session={{ authenticated: true, subject: "u" }} />, { lang: "en" });
+		expect(await screen.findByRole("heading", { level: 1, name: "Welcome back" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
+		expect(screen.queryByRole("link", { name: "Join" })).toBeNull();
 	});
 });

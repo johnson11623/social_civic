@@ -4,6 +4,7 @@
  * the first page's data, and this module loads on the first browser-side call.
  */
 import { createIsomorphicFn } from "@tanstack/react-start";
+import { Effect, type Either } from "effect";
 import { makeCallApiPromise } from "effect-tanstack-start/client";
 
 import { ApiClient } from "@/services/api-client-tag";
@@ -18,3 +19,13 @@ export const getRuntime = createIsomorphicFn()
 	.client(() => clientRuntime);
 
 export const call = makeCallApiPromise(ApiClient, getRuntime);
+
+type Api = Parameters<Parameters<typeof call>[0]>[0];
+
+/**
+ * Like `call`, but typed failures come back as `Left` instead of throwing, so
+ * components can branch on `_tag` without importing Effect themselves.
+ */
+export const callEither = <A, E>(
+	fn: (api: Api) => Effect.Effect<A, E, never>,
+): Promise<Either.Either<A, E>> => call((api) => Effect.either(fn(api)));

@@ -1,6 +1,7 @@
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense } from "react";
 
+import { SiteHeader } from "@/components/layout/SiteHeader";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { translate } from "@/lib/i18n/messages";
 import { resolveLang } from "@/lib/i18n/resolve-lang";
@@ -39,7 +40,10 @@ function RootDocument({ children }: { children: ReactNode }) {
 				<HeadContent />
 			</head>
 			<body className="bg-paper text-ink" suppressHydrationWarning>
-				<I18nProvider initialLang={lang}>{children}</I18nProvider>
+				<I18nProvider initialLang={lang}>
+					<SiteHeader />
+					{children}
+				</I18nProvider>
 				<Suspense>
 					<Devtools />
 				</Suspense>
