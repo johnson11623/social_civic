@@ -399,8 +399,19 @@ func (h *PostHandlers) Replies(w http.ResponseWriter, r *http.Request) {
 		internal(w, r, h.Logger, "thread", err)
 		return
 	}
+	ids := make([]int64, len(page.Replies))
+	for i, reply := range page.Replies {
+		ids[i] = reply.ID
+	}
+	liked, err := h.Store.LikedAmong(r.Context(), user.ID, ids)
+	if err != nil {
+		internal(w, r, h.Logger, "thread liked", err)
+		return
+	}
 	items := make([]PostJSON, 0, len(page.Replies))
 	for _, reply := range page.Replies {
+		l := liked[reply.ID]
+		reply.Liked = &l
 		reply.ChannelID, reply.Level, reply.WardID, reply.RootPublic = p.ChannelID, p.Level, p.WardID, threadRoot(p)
 		items = append(items, postJSON(reply))
 	}

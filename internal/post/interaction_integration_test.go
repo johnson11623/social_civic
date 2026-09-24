@@ -168,6 +168,9 @@ func TestReplies_ThreadInheritsScope(t *testing.T) {
 	if rec.Code != http.StatusOK || page.PostID != root.PostID || len(page.Items) != 1 || page.Items[0].PostID != r1.PostID || !page.HasMore {
 		t.Fatalf("page 1: %d %s", rec.Code, rec.Body)
 	}
+	if l := page.Items[0].Liked; l == nil || *l {
+		t.Errorf("reply liked = %v", l)
+	}
 	rec = e.do(t, "GET", "/v1/posts/"+root.PostID+"/replies?limit=1&cursor="+page.NextCursor, tok, nil)
 	page.NextCursor = ""
 	_ = json.Unmarshal(rec.Body.Bytes(), &page)
