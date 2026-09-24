@@ -254,6 +254,9 @@ describe("login (T-W1.3.2.1)", () => {
 		const router = mount("/login", LoginRoute.options.component as () => React.ReactNode);
 		const u = user();
 		await u.type(await screen.findByLabelText("National ID number"), "12345678");
+		// The ID can be viewed before sending, as on the registration form.
+		await u.click(screen.getByRole("button", { name: "Show national ID number" }));
+		expect(screen.getByLabelText("National ID number")).toHaveAttribute("type", "text");
 		await u.click(screen.getByRole("button", { name: "Send code" }));
 		await u.type(await screen.findByLabelText("6-digit code"), "654321");
 		await u.click(screen.getByRole("button", { name: "Verify and continue" }));

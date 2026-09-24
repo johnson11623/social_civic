@@ -1,15 +1,17 @@
-import { useId, useState } from "react";
+import { useState } from "react";
+
+import { NationalIdInput } from "@/components/civic/NationalIdInput";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useT } from "@/lib/i18n/I18nProvider";
-import { digitsOnly, isNationalId, normalizeKenyanMobile } from "@/lib/validation";
+import { isNationalId, normalizeKenyanMobile } from "@/lib/validation";
 
 type Values = { nationalId: string; phone: string };
 
 /**
- * T-W1.3.1.3 — national ID (masked, numeric keypad, never autofilled or
- * stored) and the mobile number the SMS code goes to.
+ * T-W1.3.1.3 — national ID (masked, with a view/hide toggle, never
+ * autofilled or stored) and the mobile number the SMS code goes to.
  */
 export function IdentityStep({
 	initial,
@@ -25,9 +27,7 @@ export function IdentityStep({
 	const { t } = useT();
 	const [nationalId, setNationalId] = useState(initial.nationalId);
 	const [phone, setPhone] = useState(initial.phone);
-	const [show, setShow] = useState(false);
 	const [touched, setTouched] = useState(false);
-	const idInput = useId();
 
 	const idError =
 		touched && !isNationalId(nationalId) ? t("join.identity.idError") : serverErrors?.nationalId;
@@ -44,31 +44,12 @@ export function IdentityStep({
 				if (isNationalId(nationalId) && normalizeKenyanMobile(phone)) onNext({ nationalId, phone });
 			}}
 		>
-			<div className="flex flex-col gap-1">
-				<Input
-					id={idInput}
-					label={t("join.identity.id")}
-					hint={t("join.identity.idHint")}
-					error={idError}
-					type={show ? "text" : "password"}
-					inputMode="numeric"
-					autoComplete="off"
-					spellCheck={false}
-					maxLength={8}
-					value={nationalId}
-					onChange={(e) => setNationalId(digitsOnly(e.target.value, 8))}
-				/>
-				<Button
-					variant="ghost"
-					size="sm"
-					aria-controls={idInput}
-					aria-pressed={show}
-					onClick={() => setShow((s) => !s)}
-					className="w-fit"
-				>
-					{show ? t("common.hide") : t("common.show")}
-				</Button>
-			</div>
+			<NationalIdInput
+				value={nationalId}
+				onChange={setNationalId}
+				hint={t("join.identity.idHint")}
+				error={idError}
+			/>
 			<Input
 				label={t("join.identity.phone")}
 				hint={t("join.identity.phoneHint")}

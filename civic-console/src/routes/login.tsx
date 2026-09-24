@@ -1,12 +1,12 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { NationalIdInput } from "@/components/civic/NationalIdInput";
 import { CodeStep, RESEND_AFTER_SECONDS } from "@/components/join/CodeStep";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { describeError } from "@/lib/api-errors";
 import { useT } from "@/lib/i18n/I18nProvider";
-import { digitsOnly, isNationalId } from "@/lib/validation";
+import { isNationalId } from "@/lib/validation";
 import { callApiEither } from "@/runtimes/get-runtime";
 
 export const Route = createFileRoute("/login")({ component: Login });
@@ -68,15 +68,10 @@ function Login() {
 					}}
 				>
 					<p className="text-body text-muted">{t("login.lead")}</p>
-					<Input
-						label={t("join.identity.id")}
-						error={touched && !isNationalId(nationalId) ? t("join.identity.idError") : undefined}
-						type="password"
-						inputMode="numeric"
-						autoComplete="off"
-						maxLength={8}
+					<NationalIdInput
 						value={nationalId}
-						onChange={(e) => setNationalId(digitsOnly(e.target.value, 8))}
+						onChange={setNationalId}
+						error={touched && !isNationalId(nationalId) ? t("join.identity.idError") : undefined}
 					/>
 					{error && (
 						<p role="alert" className="rounded-md bg-danger/10 p-3 text-body text-danger">

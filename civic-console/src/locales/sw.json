@@ -99,5 +99,6 @@
 	"login.title": "Ingia",
 	"login.lead": "Weka nambari yako ya kitambulisho. Tutatuma msimbo kwa simu uliyosajili.",
 	"login.noAccount": "Mgeni hapa?",
-	"login.sendCode": "Tuma msimbo"
+	"login.sendCode": "Tuma msimbo",
+	"join.identity.reveal": "Onyesha nambari ya kitambulisho"
 }
