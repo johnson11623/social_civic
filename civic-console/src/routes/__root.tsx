@@ -61,7 +61,8 @@ function RootDocument({ children }: { children: ReactNode }) {
 					<ToastProvider>
 						<SiteHeader user={user} />
 						{children}
-						<SiteFooter />
+						{/* Signed-in users change language on their account page. */}
+						{!user && <SiteFooter />}
 						<SessionKeeper />
 					</ToastProvider>
 				</I18nProvider>

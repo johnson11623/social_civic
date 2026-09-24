@@ -1,9 +1,9 @@
 import { LanguageToggle } from "@/components/civic/LanguageToggle";
 
 /**
- * Bottom of every screen: the EN/SW switch, so visitors who haven't signed
- * in can still change language (Web App Design §8). Signed-in users also
- * have it on their account page.
+ * The EN/SW switch for visitors who haven't signed in (landing, join, log
+ * in), so they can still change language (Web App Design §8). Signed-in
+ * users have it on their account page instead.
  */
 export function SiteFooter() {
 	return (
