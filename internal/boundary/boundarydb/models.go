@@ -33,6 +33,41 @@ type Consent struct {
 	IpHash      []byte
 }
 
+type OtpChallenge struct {
+	ID            int64
+	UserID        int64
+	CodeHash      []byte
+	KeyVersion    string
+	ExpiresAt     time.Time
+	Attempts      int32
+	ConsumedAt    *time.Time
+	InvalidatedAt *time.Time
+	CreatedAt     time.Time
+}
+
+type Outbox struct {
+	ID           int64
+	Topic        string
+	PartitionKey string
+	EventID      uuid.UUID
+	Payload      []byte
+	CreatedAt    time.Time
+	PublishedAt  *time.Time
+	Attempts     int32
+	LastError    pgtype.Text
+}
+
+type RefreshToken struct {
+	Jti          uuid.UUID
+	UserID       int64
+	FamilyID     uuid.UUID
+	IssuedAt     time.Time
+	ExpiresAt    time.Time
+	RevokedAt    *time.Time
+	RevokeReason pgtype.Text
+	ReplacedBy   pgtype.UUID
+}
+
 type User struct {
 	ID                   int64
 	PublicID             uuid.UUID
@@ -46,6 +81,9 @@ type User struct {
 	State                int16
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	MsisdnCiphertext     []byte
+	MsisdnKeyVersion     pgtype.Text
+	MsisdnHash           []byte
 }
 
 type VerificationAttempt struct {

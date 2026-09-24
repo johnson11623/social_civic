@@ -18,6 +18,7 @@ import (
 	"github.com/johnson11623/social_civic/internal/platform/problem"
 	"github.com/johnson11623/social_civic/pkg/events"
 	"github.com/johnson11623/social_civic/pkg/kms"
+	"github.com/johnson11623/social_civic/pkg/pii"
 )
 
 // EventUserRegistered is the CloudEvents type for a completed registration.
@@ -35,6 +36,7 @@ type RegisterRequest struct {
 	NationalID     string `json:"national_id"`
 	DisplayName    string `json:"display_name"`
 	PreferredLang  string `json:"preferred_lang"`
+	Phone          string `json:"phone"`   // Kenyan mobile for SMS login codes, e.g. 0712 345 678
 	WardID         int    `json:"ward_id"` // IEBC ward code, 1–1450
 	ConsentVersion string `json:"consent_version"`
 	ConsentGranted bool   `json:"consent_granted"`
@@ -65,6 +67,7 @@ type RegisterResponse struct {
 type UserRegisteredData struct {
 	UserID         int64  `json:"user_id"`
 	PublicID       string `json:"public_id"`
+	Phone          string `json:"phone"`   // Kenyan mobile for SMS login codes, e.g. 0712 345 678
 	WardID         int    `json:"ward_id"` // IEBC ward code, 1–1450
 	ConstituencyID int    `json:"constituency_id"`
 	CountyID       int    `json:"county_id"`
@@ -75,6 +78,7 @@ type UserRegisteredData struct {
 // RegisterHandler serves POST /v1/auth/register (T-1.1.1.2).
 type RegisterHandler struct {
 	Store    Store
+	Sessions Sessions
 	Keyring  kms.Keyring
 	Boundary BoundaryResolver
 	Tokens   *TokenIssuer
@@ -118,9 +122,19 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pepper, err := h.Keyring.Current(ctx, PepperKeyName)
+	var piiKey kms.Key
+	if err == nil {
+		piiKey, err = h.Keyring.Current(ctx, PIIKeyName)
+	}
 	if err != nil {
 		h.Logger.ErrorContext(ctx, "keyring unavailable", "err", err)
 		problem.Write(w, r, http.StatusServiceUnavailable, "kms_unavailable", i18n.MsgRegistrationUnavailable)
+		return
+	}
+	publicID := uuid.Must(uuid.NewV7())
+	msisdnCiphertext, err := pii.Seal(piiKey.Material, []byte(req.Phone), msisdnAAD(publicID))
+	if err != nil {
+		h.fail(ctx, w, r, "encrypt phone", err)
 		return
 	}
 
@@ -139,7 +153,7 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	created, err := h.Store.CreateUser(ctx, NewUser{
-		PublicID:       uuid.Must(uuid.NewV7()),
+		PublicID:       publicID,
 		NationalIDHash: hashNationalID(req.NationalID, pepper.Material),
 		KeyVersion:     pepper.Version,
 		DisplayName:    req.DisplayName,
@@ -150,6 +164,10 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ConsentVersion: req.ConsentVersion,
 		ConsentAt:      now,
 		IPHash:         hashIP(clientIP(r), pepper.Material),
+
+		MSISDNCiphertext: msisdnCiphertext,
+		MSISDNKeyVersion: piiKey.Version,
+		MSISDNHash:       hashMSISDN(req.Phone, pepper.Material),
 	}, userRegistered)
 	if errors.Is(err, ErrDuplicateNationalID) {
 		problem.Write(w, r, http.StatusConflict, "id_already_registered", i18n.MsgIDAlreadyRegistered)
@@ -160,16 +178,22 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	publicID := created.PublicID.String()
-	tokens, err := h.Tokens.Issue(publicID)
+	tokens, err := h.Tokens.Issue(created.PublicID.String(), ScopeClaim{
+		Ward: scope.Ward.Code, Constituency: scope.Constituency.Code, County: scope.County.Code,
+	})
 	if err != nil {
 		h.fail(ctx, w, r, "issue tokens", err)
 		return
 	}
+	// The user is committed; if the session cannot be saved they can still log in.
+	if err := h.Sessions.SaveRefreshToken(ctx, created.ID, uuid.Must(uuid.NewV7()), tokens); err != nil {
+		h.fail(ctx, w, r, "save session", err)
+		return
+	}
 
 	httpjson.Write(w, http.StatusCreated, RegisterResponse{
-		UserID:        publicID,
-		PublicID:      publicID,
+		UserID:        created.PublicID.String(),
+		PublicID:      created.PublicID.String(),
 		DisplayName:   req.DisplayName,
 		PreferredLang: req.PreferredLang,
 		Groups: []Group{
@@ -210,6 +234,12 @@ func validateRegister(req *RegisterRequest) []problem.FieldError {
 
 	if req.WardID <= 0 {
 		errs = append(errs, problem.FieldError{Field: "ward_id", Code: "required"})
+	}
+
+	if phone, err := NormalizeKenyanMobile(req.Phone); err != nil {
+		errs = append(errs, problem.FieldError{Field: "phone", Code: "invalid_kenyan_mobile"})
+	} else {
+		req.Phone = phone
 	}
 
 	req.ConsentVersion = strings.TrimSpace(req.ConsentVersion)

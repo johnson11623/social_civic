@@ -46,6 +46,15 @@ const (
 	MsgUnknownWard             Key = "identity.unknown_ward"
 	MsgIDAlreadyRegistered     Key = "identity.id_already_registered"
 	MsgRegistrationUnavailable Key = "identity.registration_unavailable"
+	MsgInvalidPhone            Key = "identity.invalid_phone"
+	MsgInvalidCredentials      Key = "identity.invalid_credentials"
+	MsgTokenInvalid            Key = "identity.token_invalid"
+	MsgTokenExpired            Key = "identity.token_expired"
+	MsgTokenRevoked            Key = "identity.token_revoked"
+	MsgTokenReuseDetected      Key = "identity.token_reuse_detected"
+
+	// SMSLoginCode takes the code (%s) and its lifetime in minutes (%d).
+	MsgSMSLoginCode Key = "sms.login_code"
 
 	MsgSearchTooShort Key = "boundary.search_too_short"
 	MsgSearchTooLong  Key = "boundary.search_too_long"

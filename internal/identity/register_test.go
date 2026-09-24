@@ -13,10 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/johnson11623/social_civic/internal/boundary"
 	"github.com/johnson11623/social_civic/internal/platform/problem"
 	"github.com/johnson11623/social_civic/pkg/events"
 	"github.com/johnson11623/social_civic/pkg/kms"
+	"github.com/johnson11623/social_civic/pkg/pii"
 )
 
 var fixedNow = time.Date(2026, 3, 1, 8, 15, 0, 0, time.UTC)
@@ -26,9 +29,15 @@ const testPepper = "test-pepper-0123456789abcdef0123"
 // fakeStore records users and the events that would be enqueued with them.
 // Like the real store, it enqueues an event only when the write succeeds.
 type fakeStore struct {
-	calls  []NewUser
-	events []events.Event
-	err    error
+	calls    []NewUser
+	events   []events.Event
+	sessions []TokenPair
+	err      error
+}
+
+func (f *fakeStore) SaveRefreshToken(_ context.Context, _ int64, _ uuid.UUID, p TokenPair) error {
+	f.sessions = append(f.sessions, p)
+	return nil
 }
 
 func (f *fakeStore) CreateUser(_ context.Context, u NewUser, event func(CreatedUser) events.Event) (CreatedUser, error) {
@@ -71,6 +80,7 @@ func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	keyring := kms.NewStatic()
 	keyring.Set(PepperKeyName, []byte(testPepper), "v7")
+	keyring.Set(PIIKeyName, bytes.Repeat([]byte{9}, 32), "pii-v1")
 	tokens, err := NewTokenIssuer([]byte("test-signing-key-0123456789abcdef"), func() time.Time { return fixedNow })
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +88,7 @@ func newFixture(t *testing.T) *fixture {
 	f := &fixture{store: &fakeStore{}, tokens: tokens}
 	f.handler = &RegisterHandler{
 		Store:    f.store,
+		Sessions: f.store,
 		Keyring:  keyring,
 		Boundary: testTree(t),
 		Tokens:   tokens,
@@ -92,6 +103,7 @@ func validBody() map[string]any {
 		"national_id":     "12345678",
 		"display_name":    "Wanjiku M.",
 		"preferred_lang":  "sw",
+		"phone":           "0712 345 678",
 		"ward_id":         551, // Kiamwangi, Gatundu South, Kiambu
 		"consent_version": "2026-01",
 		"consent_granted": true,
@@ -164,13 +176,28 @@ func TestRegister_Success(t *testing.T) {
 
 	// Tokens are valid, typed, and carry jti/aud/iss/nbf (F-03).
 	for typ, tok := range map[string]string{"access": resp.AccessToken, "refresh": resp.RefreshToken} {
-		c, err := f.tokens.Parse(tok)
+		c, err := f.tokens.Parse(tok, typ)
 		if err != nil {
 			t.Fatalf("%s token invalid: %v", typ, err)
 		}
 		if c.Type != typ || c.Subject != resp.PublicID || c.ID == "" || c.NotBefore == nil {
 			t.Errorf("%s claims = %+v", typ, c)
 		}
+	}
+	// T-1.1.2.6: the access token carries the user's scope.
+	if c, _ := f.tokens.Parse(resp.AccessToken, TokenTypeAccess); c.Scope == nil || *c.Scope != (ScopeClaim{Ward: 551, Constituency: 111, County: 22}) {
+		t.Errorf("access token scope = %+v", c.Scope)
+	}
+	// The refresh token was saved, so it can be used.
+	if len(f.store.sessions) != 1 {
+		t.Errorf("sessions saved = %d, want 1", len(f.store.sessions))
+	}
+	// The phone is normalized, encrypted and hashed — never stored in the clear.
+	if len(u0(f).MSISDNHash) != 32 || bytes.Contains(u0(f).MSISDNCiphertext, []byte("712345678")) || u0(f).MSISDNKeyVersion != "pii-v1" {
+		t.Errorf("phone fields: %+v", u0(f))
+	}
+	if got, err := pii.Open(bytes.Repeat([]byte{9}, 32), u0(f).MSISDNCiphertext, msisdnAAD(u0(f).PublicID)); err != nil || string(got) != "+254712345678" {
+		t.Errorf("decrypted phone = %q, %v", got, err)
 	}
 
 	// Store received the hash and key version — never the raw ID.
@@ -241,6 +268,8 @@ func TestRegister_Rejections(t *testing.T) {
 		{"display name too long", func(b map[string]any) { b["display_name"] = strings.Repeat("ñ", 101) }, 422, "validation_failed", "display_name"},
 		{"unsupported language", func(b map[string]any) { b["preferred_lang"] = "fr" }, 422, "validation_failed", "preferred_lang"},
 		{"missing ward", func(b map[string]any) { delete(b, "ward_id") }, 422, "validation_failed", "ward_id"},
+		{"missing phone", func(b map[string]any) { delete(b, "phone") }, 422, "validation_failed", "phone"},
+		{"landline phone", func(b map[string]any) { b["phone"] = "020 222 2222" }, 422, "validation_failed", "phone"},
 		{"unknown ward", func(b map[string]any) { b["ward_id"] = 9999 }, 422, "invalid_unit", "ward_id"},
 		{"ward code past 1450", func(b map[string]any) { b["ward_id"] = 1451 }, 422, "invalid_unit", "ward_id"},
 	}
@@ -274,7 +303,7 @@ func TestRegister_Rejections(t *testing.T) {
 func TestRegister_MalformedBodies(t *testing.T) {
 	for name, body := range map[string]string{
 		"not json":      "national_id=12345678",
-		"unknown field": `{"national_id":"12345678","display_name":"W","ward_id":551,"consent_version":"2026-01","consent_granted":true,"is_admin":true}`,
+		"unknown field": `{"national_id":"12345678","display_name":"W","phone":"0712345678","ward_id":551,"consent_version":"2026-01","consent_granted":true,"is_admin":true}`,
 		"two objects":   `{"national_id":"12345678"}{"national_id":"87654321"}`,
 		"wrong type":    `{"national_id":12345678}`,
 		"empty":         ``,
@@ -433,3 +462,5 @@ func TestRegister_EveryErrorIsLocalized(t *testing.T) {
 		})
 	}
 }
+
+func u0(f *fixture) NewUser { return f.store.calls[0] }

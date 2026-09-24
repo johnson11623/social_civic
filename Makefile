@@ -38,6 +38,7 @@ N ?= 1
 DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
 DEV_NATIONAL_ID_PEPPER   ?= dev-only-national-id-pepper-change-me-0123
 DEV_RATE_LIMIT_KEY       ?= dev-only-rate-limit-key-change-me-0123456789
+DEV_PII_ENCRYPTION_KEY   ?= dev-only-pii-encryption-key-change-me-012345
 SQLC := docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.27.0
 
 help: ## List available commands
@@ -94,7 +95,7 @@ migrate-create: ## Create a new migration pair (NAME=<snake_case_name>)
 ## ---- Database tests (throwaway database) ----------------------------------
 
 test-db: ## Fresh test DB: migrate up, run test/db/*_test.sql, down/up round-trip, tear down
-	@$(MAKE) test-db-up
+	@$(MAKE) test-db-down test-db-up
 	@status=0; $(MAKE) test-db-run || status=$$?; $(MAKE) test-db-down; exit $$status
 
 test-db-up: ## Start the throwaway test Postgres
@@ -124,6 +125,7 @@ run-api: db-up migrate-up db-seed redis-up ## Run the API against the dev databa
 	DATABASE_URL="$(HOST_DB_URL)" \
 	REDIS_URL="redis://localhost:$(REDIS_PORT)/0" \
 	RATE_LIMIT_KEY="$(DEV_RATE_LIMIT_KEY)" \
+	PII_ENCRYPTION_KEY="$(DEV_PII_ENCRYPTION_KEY)" \
 	JWT_SIGNING_KEY="$(DEV_JWT_SIGNING_KEY)" \
 	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)" \
 	go run ./cmd/api
@@ -154,7 +156,7 @@ test: ## Unit tests (integration tests skip without a database)
 	go test -race -count=1 ./...
 
 test-integration: ## Go tests against a fresh, migrated test database and the event bus
-	@$(MAKE) test-db-up kafka-up redis-up
+	@$(MAKE) test-db-down test-db-up kafka-up redis-up
 	@status=0; \
 	$(MIGRATE_TEST) up && TEST_DATABASE_URL="$(HOST_TEST_DB_URL)" KAFKA_BROKERS="localhost:$(KAFKA_PORT)" \
 		TEST_REDIS_URL="redis://localhost:$(REDIS_PORT)/15" \

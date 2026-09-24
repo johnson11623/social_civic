@@ -4,10 +4,19 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
+	"strconv"
+
+	"github.com/google/uuid"
 )
 
-// PepperKeyName is the keyring entry holding the national ID HMAC pepper.
-const PepperKeyName = "national-id-pepper"
+// Keyring entries used by identity.
+const (
+	// PepperKeyName holds the HMAC pepper for national IDs, phone numbers,
+	// IPs and login codes.
+	PepperKeyName = "national-id-pepper"
+	// PIIKeyName holds the 32-byte AES-256-GCM key for personal data at rest.
+	PIIKeyName = "pii-encryption-key"
+)
 
 // ErrInvalidNationalID is returned for IDs that are not exactly 8 digits.
 var ErrInvalidNationalID = errors.New("identity: national ID must be 8 digits")
@@ -45,4 +54,19 @@ func hashIP(ip string, pepper []byte) []byte {
 		return nil
 	}
 	return hmacSHA256("ip:"+ip, pepper)
+}
+
+// hashMSISDN hashes a normalized phone number for lookups.
+func hashMSISDN(e164 string, pepper []byte) []byte {
+	return hmacSHA256("msisdn:"+e164, pepper)
+}
+
+// msisdnAAD binds an encrypted phone number to its user.
+func msisdnAAD(publicID uuid.UUID) []byte {
+	return []byte("users.msisdn:" + publicID.String())
+}
+
+// hashOTP hashes a login code for a user.
+func hashOTP(userID int64, code string, pepper []byte) []byte {
+	return hmacSHA256("otp:"+strconv.FormatInt(userID, 10)+":"+code, pepper)
 }

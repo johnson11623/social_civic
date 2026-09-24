@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -23,6 +24,7 @@ import (
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
 	"github.com/johnson11623/social_civic/internal/platform/problem"
 	"github.com/johnson11623/social_civic/internal/platform/requestid"
+	"github.com/johnson11623/social_civic/internal/sms"
 	"github.com/johnson11623/social_civic/pkg/kms"
 	"github.com/johnson11623/social_civic/pkg/ratelimit"
 )
@@ -35,6 +37,7 @@ type config struct {
 	Pepper        string
 	PepperVersion string
 	RedisURL      string
+	PIIKey        string
 	RateLimitKey  string
 }
 
@@ -47,6 +50,7 @@ func loadConfig() (config, error) {
 		Pepper:        os.Getenv("NATIONAL_ID_PEPPER"),
 		PepperVersion: getenv("NATIONAL_ID_PEPPER_VERSION", "v1"),
 		RedisURL:      os.Getenv("REDIS_URL"),
+		PIIKey:        os.Getenv("PII_ENCRYPTION_KEY"),
 		RateLimitKey:  os.Getenv("RATE_LIMIT_KEY"),
 	}
 	switch {
@@ -56,6 +60,8 @@ func loadConfig() (config, error) {
 		return c, errors.New("JWT_SIGNING_KEY is required")
 	case c.Pepper == "":
 		return c, errors.New("NATIONAL_ID_PEPPER is required")
+	case len(c.PIIKey) < 32:
+		return c, errors.New("PII_ENCRYPTION_KEY is required (at least 32 bytes)")
 	case c.RedisURL == "":
 		return c, errors.New("REDIS_URL is required")
 	case len(c.RateLimitKey) < 32:
@@ -116,7 +122,13 @@ func run(logger *slog.Logger) error {
 	}
 	byIP := ratelimit.ByClientIP([]byte(cfg.RateLimitKey))
 	// API Spec §1.6 rate class "auth": 5 registrations per IP per hour (T-1.1.1.10).
-	registerLimit := ratelimit.Middleware(limiter, ratelimit.Rule{Name: "register", Limit: 5, Window: time.Hour}, byIP, tooManyRequests, logger)
+	limit := func(name string, n int, window time.Duration) func(http.Handler) http.Handler {
+		return ratelimit.Middleware(limiter, ratelimit.Rule{Name: name, Limit: n, Window: window}, byIP, tooManyRequests, logger)
+	}
+	registerLimit := limit("register", 5, time.Hour)  // T-1.1.1.10
+	otpLimit := limit("otp", 5, 15*time.Minute)       // SMS cost and abuse
+	loginLimit := limit("login", 5, 5*time.Minute)    // T-1.1.2.7
+	refreshLimit := limit("refresh", 10, time.Minute) // F-05
 
 	tree, err := boundary.LoadTree(ctx, pool)
 	if err != nil {
@@ -126,19 +138,33 @@ func run(logger *slog.Logger) error {
 
 	keyring := kms.NewStatic()
 	keyring.Set(identity.PepperKeyName, []byte(cfg.Pepper), cfg.PepperVersion)
+	piiKey := sha256.Sum256([]byte(cfg.PIIKey)) // dev keyring: derive the 32-byte AES key
+	keyring.Set(identity.PIIKeyName, piiKey[:], "dev-v1")
 
 	tokens, err := identity.NewTokenIssuer([]byte(cfg.JWTSigningKey), time.Now)
 	if err != nil {
 		return err
 	}
 
+	identityStore := identity.NewPostgresStore(pool)
 	register := &identity.RegisterHandler{
-		Store:    identity.NewPostgresStore(pool),
+		Store:    identityStore,
+		Sessions: identityStore,
 		Keyring:  keyring,
 		Boundary: tree,
 		Tokens:   tokens,
 		Logger:   logger,
 		Now:      time.Now,
+	}
+
+	auth := &identity.AuthHandlers{
+		Store:   identityStore,
+		Keyring: keyring,
+		Tokens:  tokens,
+		SMS:     sms.DevLogSender{Logger: logger}, // carrier adapter: EPIC 4.5
+		Limiter: limiter,
+		Logger:  logger,
+		Now:     time.Now,
 	}
 
 	r := chi.NewRouter()
@@ -149,6 +175,9 @@ func run(logger *slog.Logger) error {
 	r.Get("/v1/boundary/tree", boundaryAPI.GetTree)
 	r.Get("/v1/boundary/search", boundaryAPI.Search)
 	r.With(registerLimit).Method(http.MethodPost, "/v1/auth/register", register)
+	r.With(otpLimit).Post("/v1/auth/otp", auth.RequestOTP)
+	r.With(loginLimit).Post("/v1/auth/login", auth.Login)
+	r.With(refreshLimit).Post("/v1/auth/refresh", auth.Refresh)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

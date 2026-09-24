@@ -1,20 +1,46 @@
 {
   "info": {
     "name": "Kenyan Civic Platform API",
-    "description": "Local API checks. Start the API with `make run-api` (http://localhost:8090), then run the collection top to bottom: Search saves a real ward code, Register uses it with a fresh random national ID, and the negative cases reuse that ID.",
+    "description": "Local API checks. Start the API with `make run-api` (http://localhost:8090), then run the collection top to bottom: Search saves a real ward code, Register uses it with a fresh random national ID, and the negative cases reuse that ID. Login needs the SMS code: in development it is printed to the API log (\"DEV SMS (not sent)\"); set the `otp` variable to run the Login request. Registration requires a Kenyan mobile number.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8090" },
-    { "key": "wardCode", "value": "551" },
-    { "key": "nationalId", "value": "" },
-    { "key": "accessToken", "value": "" },
-    { "key": "refreshToken", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8090"
+    },
+    {
+      "key": "wardCode",
+      "value": "551"
+    },
+    {
+      "key": "nationalId",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "firstRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "otp",
+      "value": ""
+    }
   ],
   "item": [
     {
       "name": "Health",
-      "request": { "method": "GET", "url": "{{baseUrl}}/v1/health" },
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/v1/health"
+      },
       "event": [
         {
           "listen": "test",
@@ -37,12 +63,30 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1/boundary/search?q=kiamwngi&level=ward&limit=5",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1", "boundary", "search"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "boundary",
+                "search"
+              ],
               "query": [
-                { "key": "q", "value": "kiamwngi", "description": "Name as typed: case, apostrophes, spacing and small typos are tolerated" },
-                { "key": "level", "value": "ward", "description": "county | constituency | ward (optional)" },
-                { "key": "limit", "value": "5", "description": "1–50, default 10" }
+                {
+                  "key": "q",
+                  "value": "kiamwngi",
+                  "description": "Name as typed: case, apostrophes, spacing and small typos are tolerated"
+                },
+                {
+                  "key": "level",
+                  "value": "ward",
+                  "description": "county | constituency | ward (optional)"
+                },
+                {
+                  "key": "limit",
+                  "value": "5",
+                  "description": "1–50, default 10"
+                }
               ]
             }
           },
@@ -65,7 +109,10 @@
         },
         {
           "name": "Search across levels",
-          "request": { "method": "GET", "url": "{{baseUrl}}/v1/boundary/search?q=ziwa ngombe" },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/boundary/search?q=ziwa ngombe"
+          },
           "event": [
             {
               "listen": "test",
@@ -84,7 +131,10 @@
         },
         {
           "name": "Search too short (422)",
-          "request": { "method": "GET", "url": "{{baseUrl}}/v1/boundary/search?q=a" },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/boundary/search?q=a"
+          },
           "event": [
             {
               "listen": "test",
@@ -99,7 +149,10 @@
         },
         {
           "name": "Tree",
-          "request": { "method": "GET", "url": "{{baseUrl}}/v1/boundary/tree" },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/boundary/tree"
+          },
           "event": [
             {
               "listen": "test",
@@ -128,11 +181,16 @@
           "name": "Register",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/v1/auth/register",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"national_id\": \"{{nationalId}}\",\n  \"display_name\": \"Wanjiku M.\",\n  \"preferred_lang\": \"sw\",\n  \"ward_id\": {{wardCode}},\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": true\n}"
+              "raw": "{\n  \"national_id\": \"{{nationalId}}\",\n  \"phone\": \"0712 345 678\",\n  \"display_name\": \"Wanjiku M.\",\n  \"preferred_lang\": \"sw\",\n  \"ward_id\": {{wardCode}},\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": true\n}"
             }
           },
           "event": [
@@ -159,7 +217,8 @@
                   "});",
                   "pm.test('never echoes the national ID', () => pm.expect(pm.response.text()).to.not.include(pm.collectionVariables.get('nationalId')));",
                   "pm.collectionVariables.set('accessToken', body.access_token);",
-                  "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+                  "pm.collectionVariables.set('refreshToken', body.refresh_token);",
+                  "pm.collectionVariables.set('firstRefreshToken', body.refresh_token);"
                 ]
               }
             }
@@ -169,11 +228,16 @@
           "name": "Register duplicate ID (409)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/v1/auth/register",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"national_id\": \"{{nationalId}}\",\n  \"display_name\": \"Someone Else\",\n  \"ward_id\": {{wardCode}},\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": true\n}"
+              "raw": "{\n  \"national_id\": \"{{nationalId}}\",\n  \"phone\": \"0712 345 678\",\n  \"display_name\": \"Someone Else\",\n  \"ward_id\": {{wardCode}},\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": true\n}"
             }
           },
           "event": [
@@ -192,11 +256,16 @@
           "name": "Register without consent (422)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/v1/auth/register",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"national_id\": \"12345670\",\n  \"display_name\": \"No Consent\",\n  \"ward_id\": {{wardCode}},\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": false\n}"
+              "raw": "{\n  \"national_id\": \"12345670\",\n  \"phone\": \"0712 345 678\",\n  \"display_name\": \"No Consent\",\n  \"ward_id\": {{wardCode}},\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": false\n}"
             }
           },
           "event": [
@@ -215,11 +284,16 @@
           "name": "Register unknown ward (422)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/v1/auth/register",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"national_id\": \"12345671\",\n  \"display_name\": \"Nowhere\",\n  \"ward_id\": 1451,\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": true\n}"
+              "raw": "{\n  \"national_id\": \"12345671\",\n  \"phone\": \"0712 345 678\",\n  \"display_name\": \"Nowhere\",\n  \"ward_id\": 1451,\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": true\n}"
             }
           },
           "event": [
@@ -238,11 +312,16 @@
           "name": "Register invalid national ID (400)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/v1/auth/register",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"national_id\": \"1234567\",\n  \"display_name\": \"Short ID\",\n  \"ward_id\": {{wardCode}},\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": true\n}"
+              "raw": "{\n  \"national_id\": \"1234567\",\n  \"phone\": \"0712 345 678\",\n  \"display_name\": \"Short ID\",\n  \"ward_id\": {{wardCode}},\n  \"consent_version\": \"2026-01\",\n  \"consent_granted\": true\n}"
             }
           },
           "event": [
@@ -252,6 +331,217 @@
                 "exec": [
                   "pm.test('400', () => pm.response.to.have.status(400));",
                   "pm.test('code invalid_id', () => pm.expect(pm.response.json().code).to.eql('invalid_id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request login code (202)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/auth/otp",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"national_id\": \"{{nationalId}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+                  "pm.test('expires in 5 minutes', () => pm.expect(pm.response.json().expires_in).to.eql(300));",
+                  "// In development the code is written to the API log: look for \"DEV SMS (not sent)\"."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request code for unknown ID (same 202)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/auth/otp",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"national_id\": \"99999999\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('202, identical to a registered ID', () => {",
+                  "  pm.response.to.have.status(202);",
+                  "  pm.expect(pm.response.json()).to.eql({otp_requested: true, expires_in: 300});",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with wrong code (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"national_id\": \"{{nationalId}}\",\n  \"otp\": \"000000\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('401 invalid_credentials', () => {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().code).to.eql('invalid_credentials');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (paste code from API log)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"national_id\": \"{{nationalId}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Manual step: set the collection variable `otp` to the code from the API log, then Send.",
+                  "if (!pm.collectionVariables.get('otp')) { pm.test('skipped: set {{otp}} first', () => {}); return; }",
+                  "pm.test('200 with tokens', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('accessToken', pm.response.json().access_token);",
+                  "pm.collectionVariables.set('refreshToken', pm.response.json().refresh_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh (rotates tokens)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{firstRefreshToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 with new tokens', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('refresh token rotated', () => pm.expect(body.refresh_token).to.not.eql(pm.collectionVariables.get('firstRefreshToken')));",
+                  "pm.test('not cacheable', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store'));",
+                  "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with rotated token (401 reuse)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{firstRefreshToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('401 token_reuse_detected', () => {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().code).to.eql('token_reuse_detected');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh after reuse (401 revoked)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('401 token_revoked: reuse signed out every session', () => {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().code).to.eql('token_revoked');",
+                  "});"
                 ]
               }
             }

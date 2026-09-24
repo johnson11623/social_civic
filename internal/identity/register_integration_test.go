@@ -25,7 +25,7 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(context.Background(), "TRUNCATE users, consents, verification_attempts, outbox RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(context.Background(), "TRUNCATE users, consents, verification_attempts, outbox, otp_challenges, refresh_tokens RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("reset tables (is the database migrated?): %v", err)
 	}
 	return pool
@@ -35,7 +35,9 @@ func newIntegrationFixture(t *testing.T) (*fixture, *pgxpool.Pool) {
 	t.Helper()
 	pool := integrationPool(t)
 	f := newFixture(t)
-	f.handler.Store = NewPostgresStore(pool)
+	store := NewPostgresStore(pool)
+	f.handler.Store = store
+	f.handler.Sessions = store
 	return f, pool
 }
 
