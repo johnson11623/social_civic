@@ -49,14 +49,14 @@ type fixture struct {
 	tokens  *TokenIssuer
 }
 
+// testTree is the real IEBC boundary set, so tests use real ward codes.
 func testTree(t *testing.T) *boundary.Tree {
 	t.Helper()
-	tree, err := boundary.NewTree("test", []boundary.Unit{
-		{ID: 1, Level: boundary.LevelNational, Name: "National"},
-		{ID: 12, Level: boundary.LevelCounty, Name: "Kiambu", ParentID: 1},
-		{ID: 145, Level: boundary.LevelConstituency, Name: "Gatundu South", ParentID: 12},
-		{ID: 1203, Level: boundary.LevelWard, Name: "Kiamwangi", ParentID: 145},
-	})
+	units, err := boundary.LoadIEBCCSVFile("../../db/seed/iebc_2022_wards.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, err := boundary.NewTree(boundary.IEBC2022, units)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func validBody() map[string]any {
 		"national_id":     "12345678",
 		"display_name":    "Wanjiku M.",
 		"preferred_lang":  "sw",
-		"ward_id":         1203,
+		"ward_id":         551, // Kiamwangi, Gatundu South, Kiambu
 		"consent_version": "2026-01",
 		"consent_granted": true,
 	}
@@ -139,9 +139,9 @@ func TestRegister_Success(t *testing.T) {
 	}
 
 	wantGroups := []Group{
-		{Level: 1, ID: 1203, Name: "Kiamwangi"},
-		{Level: 2, ID: 145, Name: "Gatundu South"},
-		{Level: 3, ID: 12, Name: "Kiambu"},
+		{Level: 1, ID: 551, Name: "Kiamwangi"},
+		{Level: 2, ID: 111, Name: "Gatundu South"},
+		{Level: 3, ID: 22, Name: "Kiambu"},
 		{Level: 4, ID: 1, Name: "National"},
 	}
 	if len(resp.Groups) != 4 {
@@ -184,7 +184,7 @@ func TestRegister_Success(t *testing.T) {
 	if u.KeyVersion != "v7" || u.ConsentVersion != "2026-01" || !u.ConsentAt.Equal(fixedNow) {
 		t.Errorf("stored user = %+v", u)
 	}
-	if u.WardID != 1203 || u.ConstituencyID != 145 || u.CountyID != 12 {
+	if u.WardID != 551 || u.ConstituencyID != 111 || u.CountyID != 22 {
 		t.Errorf("scope = %d/%d/%d", u.WardID, u.ConstituencyID, u.CountyID)
 	}
 	if len(u.IPHash) != 32 {
@@ -201,7 +201,7 @@ func TestRegister_Success(t *testing.T) {
 		t.Errorf("event leaks national ID: %s", payload)
 	}
 	data := evts[0].Data.(UserRegisteredData)
-	if data.UserID != 42 || data.WardID != 1203 || data.PublicID != resp.PublicID {
+	if data.UserID != 42 || data.WardID != 551 || data.PublicID != resp.PublicID {
 		t.Errorf("event data = %+v", data)
 	}
 }
@@ -239,7 +239,7 @@ func TestRegister_Rejections(t *testing.T) {
 		{"unsupported language", func(b map[string]any) { b["preferred_lang"] = "fr" }, 422, "validation_failed", "preferred_lang"},
 		{"missing ward", func(b map[string]any) { delete(b, "ward_id") }, 422, "validation_failed", "ward_id"},
 		{"unknown ward", func(b map[string]any) { b["ward_id"] = 9999 }, 422, "invalid_unit", "ward_id"},
-		{"ward id is a county", func(b map[string]any) { b["ward_id"] = 12 }, 422, "invalid_unit", "ward_id"},
+		{"ward code past 1450", func(b map[string]any) { b["ward_id"] = 1451 }, 422, "invalid_unit", "ward_id"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -271,7 +271,7 @@ func TestRegister_Rejections(t *testing.T) {
 func TestRegister_MalformedBodies(t *testing.T) {
 	for name, body := range map[string]string{
 		"not json":      "national_id=12345678",
-		"unknown field": `{"national_id":"12345678","display_name":"W","ward_id":1203,"consent_version":"2026-01","consent_granted":true,"is_admin":true}`,
+		"unknown field": `{"national_id":"12345678","display_name":"W","ward_id":551,"consent_version":"2026-01","consent_granted":true,"is_admin":true}`,
 		"two objects":   `{"national_id":"12345678"}{"national_id":"87654321"}`,
 		"wrong type":    `{"national_id":12345678}`,
 		"empty":         ``,

@@ -70,7 +70,7 @@ func TestRegisterIntegration_PersistsUserAndConsent(t *testing.T) {
 	if len(hash) != 32 || keyVersion != "v7" || name != "Wanjiku M." || lang != "sw" || state != 1 {
 		t.Errorf("user row: hash=%d bytes key=%s name=%s lang=%s state=%d", len(hash), keyVersion, name, lang, state)
 	}
-	if ward != 1203 || constituency != 145 || county != 12 {
+	if ward != 551 || constituency != 111 || county != 22 {
 		t.Errorf("scope = %d/%d/%d", ward, constituency, county)
 	}
 

@@ -26,7 +26,7 @@ const maxDisplayNameRunes = 100
 
 // BoundaryResolver resolves a ward to its constituency, county and national units.
 type BoundaryResolver interface {
-	ResolveWard(wardID int) (boundary.Scope, error)
+	ResolveWard(code int) (boundary.Scope, error)
 }
 
 // RegisterRequest is the body of POST /v1/auth/register.
@@ -34,12 +34,13 @@ type RegisterRequest struct {
 	NationalID     string `json:"national_id"`
 	DisplayName    string `json:"display_name"`
 	PreferredLang  string `json:"preferred_lang"`
-	WardID         int    `json:"ward_id"`
+	WardID         int    `json:"ward_id"` // IEBC ward code, 1–1450
 	ConsentVersion string `json:"consent_version"`
 	ConsentGranted bool   `json:"consent_granted"`
 }
 
-// Group is one of the four memberships a new user joins.
+// Group is one of the four memberships a new user joins. ID is the IEBC code
+// within the level (national is 1).
 type Group struct {
 	Level int    `json:"level"` // 1=ward, 2=constituency, 3=county, 4=national
 	ID    int    `json:"id"`
@@ -63,7 +64,7 @@ type RegisterResponse struct {
 type UserRegisteredData struct {
 	UserID         int64  `json:"user_id"`
 	PublicID       string `json:"public_id"`
-	WardID         int    `json:"ward_id"`
+	WardID         int    `json:"ward_id"` // IEBC ward code, 1–1450
 	ConstituencyID int    `json:"constituency_id"`
 	CountyID       int    `json:"county_id"`
 	ConsentVersion string `json:"consent_version"`
@@ -130,9 +131,9 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		KeyVersion:     pepper.Version,
 		DisplayName:    req.DisplayName,
 		PreferredLang:  req.PreferredLang,
-		WardID:         int32(scope.Ward.ID),
-		ConstituencyID: int32(scope.Constituency.ID),
-		CountyID:       int32(scope.County.ID),
+		WardID:         int32(scope.Ward.Code),
+		ConstituencyID: int32(scope.Constituency.Code),
+		CountyID:       int32(scope.County.Code),
 		ConsentVersion: req.ConsentVersion,
 		ConsentAt:      now,
 		IPHash:         hashIP(clientIP(r), pepper.Material),
@@ -159,9 +160,9 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	evt := events.New("identity", EventUserRegistered, now, UserRegisteredData{
 		UserID:         created.ID,
 		PublicID:       publicID,
-		WardID:         scope.Ward.ID,
-		ConstituencyID: scope.Constituency.ID,
-		CountyID:       scope.County.ID,
+		WardID:         scope.Ward.Code,
+		ConstituencyID: scope.Constituency.Code,
+		CountyID:       scope.County.Code,
 		ConsentVersion: req.ConsentVersion,
 		KeyVersion:     pepper.Version,
 	})
@@ -175,10 +176,10 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		DisplayName:   req.DisplayName,
 		PreferredLang: req.PreferredLang,
 		Groups: []Group{
-			{Level: 1, ID: scope.Ward.ID, Name: scope.Ward.Name},
-			{Level: 2, ID: scope.Constituency.ID, Name: scope.Constituency.Name},
-			{Level: 3, ID: scope.County.ID, Name: scope.County.Name},
-			{Level: 4, ID: scope.National.ID, Name: scope.National.Name},
+			{Level: 1, ID: scope.Ward.Code, Name: scope.Ward.DisplayName},
+			{Level: 2, ID: scope.Constituency.Code, Name: scope.Constituency.DisplayName},
+			{Level: 3, ID: scope.County.Code, Name: scope.County.DisplayName},
+			{Level: 4, ID: scope.National.Code, Name: scope.National.DisplayName},
 		},
 		AccessToken:  tokens.Access,
 		RefreshToken: tokens.Refresh,

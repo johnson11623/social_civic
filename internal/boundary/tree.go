@@ -1,43 +1,78 @@
-// Package boundary holds the administrative tree (ward → constituency →
-// county → national).
+// Package boundary holds Kenya's administrative tree (ward → constituency →
+// county → national), loaded from the admin_units table and cached in memory.
 //
-// This is an in-memory tree loaded from a JSON file. The authoritative IEBC
-// dataset, admin_units table and API arrive with EPIC 4.4 (T-4.4.1.x).
+// Units are identified by (Level, Code) using IEBC codes, which are unique
+// only within a level.
 package boundary
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
+	"sort"
 )
 
-// Level is an administrative level.
-type Level string
+// Level is an administrative level. Values match groups.level and admin_units.level.
+type Level int16
 
 const (
-	LevelWard         Level = "ward"
-	LevelConstituency Level = "constituency"
-	LevelCounty       Level = "county"
-	LevelNational     Level = "national"
+	LevelWard         Level = 1
+	LevelConstituency Level = 2
+	LevelCounty       Level = 3
+	LevelNational     Level = 4
 )
 
-// parentLevel gives the required parent level for each level.
-var parentLevel = map[Level]Level{
-	LevelWard:         LevelConstituency,
-	LevelConstituency: LevelCounty,
-	LevelCounty:       LevelNational,
+func (l Level) String() string {
+	switch l {
+	case LevelWard:
+		return "ward"
+	case LevelConstituency:
+		return "constituency"
+	case LevelCounty:
+		return "county"
+	case LevelNational:
+		return "national"
+	}
+	return fmt.Sprintf("level(%d)", int(l))
 }
 
-// ErrUnknownWard is returned when an id is not a known ward.
+// MarshalText renders levels as their names in JSON.
+func (l Level) MarshalText() ([]byte, error) { return []byte(l.String()), nil }
+
+// UnmarshalText parses a level name.
+func (l *Level) UnmarshalText(b []byte) error {
+	v, err := ParseLevel(string(b))
+	if err != nil {
+		return err
+	}
+	*l = v
+	return nil
+}
+
+// ParseLevel parses a level name.
+func ParseLevel(s string) (Level, error) {
+	for _, l := range []Level{LevelWard, LevelConstituency, LevelCounty, LevelNational} {
+		if l.String() == s {
+			return l, nil
+		}
+	}
+	return 0, fmt.Errorf("boundary: unknown level %q", s)
+}
+
+// NationalCode is the code of the single national unit.
+const NationalCode = 1
+
+// ErrUnknownWard is returned when a code is not a known ward.
 var ErrUnknownWard = errors.New("boundary: unknown ward")
 
 // Unit is one administrative unit.
 type Unit struct {
-	ID       int    `json:"id"`
-	Level    Level  `json:"level"`
-	Name     string `json:"name"`
-	ParentID int    `json:"parent_id,omitempty"`
+	Level            Level
+	Code             int
+	IEBCCode         string // zero-padded official code
+	Name             string // IEBC name, uppercase
+	DisplayName      string // readable name
+	ParentCode       int    // code at Level+1; 0 for national
+	RegisteredVoters int    // wards only (2022 register)
 }
 
 // Scope is a ward with its ancestors.
@@ -48,65 +83,111 @@ type Scope struct {
 	National     Unit
 }
 
+type key struct {
+	level Level
+	code  int
+}
+
 // Tree is an immutable, validated administrative tree.
 type Tree struct {
-	Version string
-	units   map[int]Unit
+	Version  string
+	units    map[key]Unit
+	children map[key][]Unit
+	index    *searchIndex
 }
 
-type treeFile struct {
-	Version string `json:"version"`
-	Units   []Unit `json:"units"`
-}
-
-// NewTree validates units and builds a tree. Every non-national unit must
-// have a parent at the level directly above it.
+// NewTree validates units and builds the tree and its search index. There must
+// be exactly one national unit, and every other unit needs a parent at the
+// level directly above it.
 func NewTree(version string, units []Unit) (*Tree, error) {
-	byID := make(map[int]Unit, len(units))
+	t := &Tree{Version: version, units: make(map[key]Unit, len(units)), children: make(map[key][]Unit)}
+	nationals := 0
 	for _, u := range units {
-		if _, dup := byID[u.ID]; dup {
-			return nil, fmt.Errorf("boundary: duplicate unit id %d", u.ID)
+		if u.Level < LevelWard || u.Level > LevelNational {
+			return nil, fmt.Errorf("boundary: unit %d has invalid level %d", u.Code, u.Level)
 		}
-		byID[u.ID] = u
+		if u.Code <= 0 || u.Name == "" || u.DisplayName == "" {
+			return nil, fmt.Errorf("boundary: %s %d is missing a code or name", u.Level, u.Code)
+		}
+		k := key{u.Level, u.Code}
+		if _, dup := t.units[k]; dup {
+			return nil, fmt.Errorf("boundary: duplicate %s %d", u.Level, u.Code)
+		}
+		if u.Level == LevelNational {
+			nationals++
+		}
+		t.units[k] = u
+	}
+	if nationals != 1 {
+		return nil, fmt.Errorf("boundary: need exactly one national unit, got %d", nationals)
 	}
 	for _, u := range units {
 		if u.Level == LevelNational {
 			continue
 		}
-		want, ok := parentLevel[u.Level]
-		if !ok {
-			return nil, fmt.Errorf("boundary: unit %d has unknown level %q", u.ID, u.Level)
+		pk := key{u.Level + 1, u.ParentCode}
+		if _, ok := t.units[pk]; !ok {
+			return nil, fmt.Errorf("boundary: %s %d has no %s parent %d", u.Level, u.Code, u.Level+1, u.ParentCode)
 		}
-		parent, ok := byID[u.ParentID]
-		if !ok || parent.Level != want {
-			return nil, fmt.Errorf("boundary: unit %d (%s) needs a %s parent", u.ID, u.Level, want)
-		}
+		t.children[pk] = append(t.children[pk], u)
 	}
-	return &Tree{Version: version, units: byID}, nil
+	for _, kids := range t.children {
+		sort.Slice(kids, func(i, j int) bool { return kids[i].DisplayName < kids[j].DisplayName })
+	}
+	t.index = newSearchIndex(t)
+	return t, nil
 }
 
-// LoadFile reads a tree from a JSON file of the form
-// {"version": "...", "units": [{"id":1,"level":"national","name":"Kenya"}, ...]}.
-func LoadFile(path string) (*Tree, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("boundary: read %s: %w", path, err)
+// Len returns the number of units, including the national unit.
+func (t *Tree) Len() int { return len(t.units) }
+
+// Count returns the number of units at a level.
+func (t *Tree) Count(level Level) int {
+	n := 0
+	for k := range t.units {
+		if k.level == level {
+			n++
+		}
 	}
-	var f treeFile
-	if err := json.Unmarshal(raw, &f); err != nil {
-		return nil, fmt.Errorf("boundary: parse %s: %w", path, err)
+	return n
+}
+
+// Unit returns the unit at (level, code).
+func (t *Tree) Unit(level Level, code int) (Unit, bool) {
+	u, ok := t.units[key{level, code}]
+	return u, ok
+}
+
+// Children returns a unit's direct children sorted by display name.
+func (t *Tree) Children(level Level, code int) []Unit {
+	return t.children[key{level, code}]
+}
+
+// Parent returns a unit's parent; ok is false for the national unit.
+func (t *Tree) Parent(u Unit) (Unit, bool) {
+	if u.Level == LevelNational {
+		return Unit{}, false
 	}
-	return NewTree(f.Version, f.Units)
+	return t.Unit(u.Level+1, u.ParentCode)
+}
+
+// Ancestors returns the unit's ancestors from nearest to county (national excluded).
+func (t *Tree) Ancestors(u Unit) []Unit {
+	var out []Unit
+	for p, ok := t.Parent(u); ok && p.Level != LevelNational; p, ok = t.Parent(p) {
+		out = append(out, p)
+	}
+	return out
 }
 
 // ResolveWard returns the ward and its ancestors.
-func (t *Tree) ResolveWard(wardID int) (Scope, error) {
-	ward, ok := t.units[wardID]
-	if !ok || ward.Level != LevelWard {
+func (t *Tree) ResolveWard(code int) (Scope, error) {
+	ward, ok := t.Unit(LevelWard, code)
+	if !ok {
 		return Scope{}, ErrUnknownWard
 	}
-	constituency := t.units[ward.ParentID]
-	county := t.units[constituency.ParentID]
-	national := t.units[county.ParentID]
+	constituency, _ := t.Parent(ward)
+	county, _ := t.Parent(constituency)
+	national, _ := t.Parent(county)
 	return Scope{Ward: ward, Constituency: constituency, County: county, National: national}, nil
 }

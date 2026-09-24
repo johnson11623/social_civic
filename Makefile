@@ -30,7 +30,7 @@ N ?= 1
 .PHONY: help db-up db-down db-reset db-logs db-ps db-psql db-url \
         migrate-up migrate-down migrate-down-all migrate-version migrate-force migrate-create \
         test-db test-db-up test-db-run test-db-down test-db-psql \
-        run-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
+        db-seed run-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
 
 # Development-only secrets for run-api. Production uses KMS/Vault (T-X.4).
 DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
@@ -114,7 +114,10 @@ test-db-psql: ## Open psql in the running test database
 
 ## ---- Go -------------------------------------------------------------------
 
-run-api: db-up migrate-up ## Run the API against the dev database (dev-only secrets)
+db-seed: ## Load reference data (IEBC counties, constituencies, wards) into the dev database
+	go run ./cmd/seed -database "$(HOST_DB_URL)"
+
+run-api: db-up migrate-up db-seed ## Run the API against the dev database (dev-only secrets)
 	DATABASE_URL="$(HOST_DB_URL)" \
 	JWT_SIGNING_KEY="$(DEV_JWT_SIGNING_KEY)" \
 	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)" \

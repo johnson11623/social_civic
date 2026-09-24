@@ -31,7 +31,6 @@ type config struct {
 	JWTSigningKey string
 	Pepper        string
 	PepperVersion string
-	BoundaryFile  string
 }
 
 func loadConfig() (config, error) {
@@ -42,7 +41,6 @@ func loadConfig() (config, error) {
 		JWTSigningKey: os.Getenv("JWT_SIGNING_KEY"),
 		Pepper:        os.Getenv("NATIONAL_ID_PEPPER"),
 		PepperVersion: getenv("NATIONAL_ID_PEPPER_VERSION", "v1"),
-		BoundaryFile:  getenv("BOUNDARY_FILE", "db/seed/boundary_dev_fixture.json"),
 	}
 	switch {
 	case c.DatabaseURL == "":
@@ -92,10 +90,11 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("ping database: %w", err)
 	}
 
-	tree, err := boundary.LoadFile(cfg.BoundaryFile)
+	tree, err := boundary.LoadTree(ctx, pool)
 	if err != nil {
 		return err
 	}
+	boundaryAPI := boundary.NewHandlers(tree)
 
 	keyring := kms.NewStatic()
 	keyring.Set(identity.PepperKeyName, []byte(cfg.Pepper), cfg.PepperVersion)
@@ -120,6 +119,8 @@ func run(logger *slog.Logger) error {
 	r.Get("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
 		httpjson.Write(w, http.StatusOK, map[string]string{"status": "ok", "time": time.Now().UTC().Format(time.RFC3339)})
 	})
+	r.Get("/v1/boundary/tree", boundaryAPI.GetTree)
+	r.Get("/v1/boundary/search", boundaryAPI.Search)
 	r.Method(http.MethodPost, "/v1/auth/register", register)
 
 	srv := &http.Server{
@@ -134,7 +135,7 @@ func run(logger *slog.Logger) error {
 
 	errc := make(chan error, 1)
 	go func() {
-		logger.Info("api listening", "addr", cfg.HTTPAddr, "env", cfg.Env, "boundary_version", tree.Version)
+		logger.Info("api listening", "addr", cfg.HTTPAddr, "env", cfg.Env, "boundary_version", tree.Version, "boundary_units", tree.Len())
 		errc <- srv.ListenAndServe()
 	}()
 
