@@ -40,6 +40,7 @@ const (
 	MsgValidationFailed Key = "error.validation_failed"
 	MsgInternal         Key = "error.internal"
 	MsgRateLimited      Key = "error.rate_limited"
+	MsgUnauthenticated  Key = "error.unauthenticated"
 
 	MsgInvalidNationalID       Key = "identity.invalid_id"
 	MsgConsentRequired         Key = "identity.consent_required"
@@ -52,6 +53,8 @@ const (
 	MsgTokenExpired            Key = "identity.token_expired"
 	MsgTokenRevoked            Key = "identity.token_revoked"
 	MsgTokenReuseDetected      Key = "identity.token_reuse_detected"
+	MsgConsentNotFound         Key = "identity.consent_not_found"
+	MsgConsentWithdrawn        Key = "identity.consent_withdrawn"
 
 	// SMSLoginCode takes the code (%s) and its lifetime in minutes (%d).
 	MsgSMSLoginCode Key = "sms.login_code"

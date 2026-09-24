@@ -6,6 +6,7 @@ package identitydb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -13,9 +14,12 @@ import (
 type Querier interface {
 	ConsumeOTP(ctx context.Context, id int64) (int64, error)
 	GetActiveOTPForUpdate(ctx context.Context, userID int64) (GetActiveOTPForUpdateRow, error)
+	GetConsent(ctx context.Context, arg GetConsentParams) (GetConsentRow, error)
 	GetRefreshTokenForUpdate(ctx context.Context, jti uuid.UUID) (GetRefreshTokenForUpdateRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	GetUserByNationalIDHash(ctx context.Context, nationalIDHash []byte) (GetUserByNationalIDHashRow, error)
+	GetUserIDByPublicID(ctx context.Context, publicID uuid.UUID) (GetUserIDByPublicIDRow, error)
+	HasActiveConsent(ctx context.Context, arg HasActiveConsentParams) (bool, error)
 	InsertConsent(ctx context.Context, arg InsertConsentParams) error
 	// created_at and expires_at both come from the application clock, so clock
 	// skew between app and database cannot violate otp_expires_after_created.
@@ -26,6 +30,7 @@ type Querier interface {
 	RecordFailedOTPAttempt(ctx context.Context, arg RecordFailedOTPAttemptParams) (int32, error)
 	RevokeAllUserRefreshTokens(ctx context.Context, arg RevokeAllUserRefreshTokensParams) (int64, error)
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
+	WithdrawConsent(ctx context.Context, arg WithdrawConsentParams) (*time.Time, error)
 }
 
 var _ Querier = (*Queries)(nil)

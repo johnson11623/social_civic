@@ -20,6 +20,7 @@ import (
 
 	"github.com/johnson11623/social_civic/internal/boundary"
 	"github.com/johnson11623/social_civic/internal/identity"
+	"github.com/johnson11623/social_civic/internal/platform/authn"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
 	"github.com/johnson11623/social_civic/internal/platform/problem"
@@ -167,6 +168,9 @@ func run(logger *slog.Logger) error {
 		Now:     time.Now,
 	}
 
+	consent := &identity.ConsentHandlers{Store: identityStore, Logger: logger, Now: time.Now}
+	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
+
 	r := chi.NewRouter()
 	r.Use(requestid.Middleware, middleware.Recoverer)
 	r.Get("/v1/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -178,6 +182,9 @@ func run(logger *slog.Logger) error {
 	r.With(otpLimit).Post("/v1/auth/otp", auth.RequestOTP)
 	r.With(loginLimit).Post("/v1/auth/login", auth.Login)
 	r.With(refreshLimit).Post("/v1/auth/refresh", auth.Refresh)
+	r.With(requireAuth).Post("/v1/users/me/consent/withdraw", consent.Withdraw)
+	// Routes that process personal data (posting, interactions) go behind
+	// requireAuth + identity.RequireConsent(identityStore, logger) (T-1.1.3.3).
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

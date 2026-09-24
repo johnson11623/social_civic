@@ -55,6 +55,27 @@ func (q *Queries) GetActiveOTPForUpdate(ctx context.Context, userID int64) (GetA
 	return i, err
 }
 
+const getConsent = `-- name: GetConsent :one
+SELECT granted_at, withdrawn_at FROM consents WHERE user_id = $1 AND version = $2
+`
+
+type GetConsentParams struct {
+	UserID  int64
+	Version string
+}
+
+type GetConsentRow struct {
+	GrantedAt   time.Time
+	WithdrawnAt *time.Time
+}
+
+func (q *Queries) GetConsent(ctx context.Context, arg GetConsentParams) (GetConsentRow, error) {
+	row := q.db.QueryRow(ctx, getConsent, arg.UserID, arg.Version)
+	var i GetConsentRow
+	err := row.Scan(&i.GrantedAt, &i.WithdrawnAt)
+	return i, err
+}
+
 const getRefreshTokenForUpdate = `-- name: GetRefreshTokenForUpdate :one
 SELECT jti, user_id, family_id, expires_at, revoked_at, revoke_reason
 FROM refresh_tokens
@@ -148,6 +169,43 @@ func (q *Queries) GetUserByNationalIDHash(ctx context.Context, nationalIDHash []
 		&i.MsisdnKeyVersion,
 	)
 	return i, err
+}
+
+const getUserIDByPublicID = `-- name: GetUserIDByPublicID :one
+SELECT id, state FROM users WHERE public_id = $1
+`
+
+type GetUserIDByPublicIDRow struct {
+	ID    int64
+	State int16
+}
+
+func (q *Queries) GetUserIDByPublicID(ctx context.Context, publicID uuid.UUID) (GetUserIDByPublicIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserIDByPublicID, publicID)
+	var i GetUserIDByPublicIDRow
+	err := row.Scan(&i.ID, &i.State)
+	return i, err
+}
+
+const hasActiveConsent = `-- name: HasActiveConsent :one
+SELECT EXISTS (
+    SELECT 1
+    FROM consents c
+    JOIN users u ON u.id = c.user_id
+    WHERE u.public_id = $1 AND c.version = $2 AND c.withdrawn_at IS NULL AND u.state = 1
+) AS active
+`
+
+type HasActiveConsentParams struct {
+	PublicID uuid.UUID
+	Version  string
+}
+
+func (q *Queries) HasActiveConsent(ctx context.Context, arg HasActiveConsentParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasActiveConsent, arg.PublicID, arg.Version)
+	var active bool
+	err := row.Scan(&active)
+	return active, err
 }
 
 const insertConsent = `-- name: InsertConsent :exec
@@ -339,4 +397,24 @@ type RotateRefreshTokenParams struct {
 func (q *Queries) RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error {
 	_, err := q.db.Exec(ctx, rotateRefreshToken, arg.Jti, arg.ReplacedBy)
 	return err
+}
+
+const withdrawConsent = `-- name: WithdrawConsent :one
+UPDATE consents
+SET withdrawn_at = $3
+WHERE user_id = $1 AND version = $2 AND withdrawn_at IS NULL
+RETURNING withdrawn_at
+`
+
+type WithdrawConsentParams struct {
+	UserID      int64
+	Version     string
+	WithdrawnAt *time.Time
+}
+
+func (q *Queries) WithdrawConsent(ctx context.Context, arg WithdrawConsentParams) (*time.Time, error) {
+	row := q.db.QueryRow(ctx, withdrawConsent, arg.UserID, arg.Version, arg.WithdrawnAt)
+	var withdrawn_at *time.Time
+	err := row.Scan(&withdrawn_at)
+	return withdrawn_at, err
 }

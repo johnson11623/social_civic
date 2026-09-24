@@ -3,10 +3,12 @@ package events
 // Topics. Each event type is published to the topic of the same name, keyed
 // by the aggregate id so events for one entity stay ordered.
 const (
-	TopicUserRegistered = "user.registered"
+	TopicUserRegistered   = "user.registered"
+	TopicConsentWithdrawn = "consent.withdrawn"
 )
 
 // AllTopics lists every topic the platform publishes to, for provisioning.
 var AllTopics = []string{
 	TopicUserRegistered,
+	TopicConsentWithdrawn,
 }

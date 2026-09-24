@@ -74,3 +74,23 @@ WHERE jti = $1 AND revoked_at IS NULL;
 UPDATE refresh_tokens
 SET revoked_at = now(), revoke_reason = sqlc.arg(reason)::text
 WHERE user_id = $1 AND revoked_at IS NULL;
+
+-- name: GetUserIDByPublicID :one
+SELECT id, state FROM users WHERE public_id = $1;
+
+-- name: WithdrawConsent :one
+UPDATE consents
+SET withdrawn_at = $3
+WHERE user_id = $1 AND version = $2 AND withdrawn_at IS NULL
+RETURNING withdrawn_at;
+
+-- name: GetConsent :one
+SELECT granted_at, withdrawn_at FROM consents WHERE user_id = $1 AND version = $2;
+
+-- name: HasActiveConsent :one
+SELECT EXISTS (
+    SELECT 1
+    FROM consents c
+    JOIN users u ON u.id = c.user_id
+    WHERE u.public_id = $1 AND c.version = $2 AND c.withdrawn_at IS NULL AND u.state = 1
+) AS active;

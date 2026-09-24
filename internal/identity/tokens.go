@@ -6,6 +6,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+
+	"github.com/johnson11623/social_civic/internal/platform/authn"
 )
 
 const (
@@ -132,4 +134,16 @@ func (t *TokenIssuer) Parse(token, wantType string) (*Claims, error) {
 		return nil, ErrTokenInvalid
 	}
 	return claims, nil
+}
+
+// VerifyAccess implements authn.Verifier for Bearer access tokens.
+func (t *TokenIssuer) VerifyAccess(token string) (authn.Principal, error) {
+	c, err := t.Parse(token, TokenTypeAccess)
+	switch {
+	case errors.Is(err, ErrTokenExpired):
+		return authn.Principal{}, authn.ErrExpired
+	case err != nil || c.Scope == nil || c.Subject == "":
+		return authn.Principal{}, authn.ErrInvalid
+	}
+	return authn.Principal{Subject: c.Subject, Ward: c.Scope.Ward, Constituency: c.Scope.Constituency, County: c.Scope.County}, nil
 }

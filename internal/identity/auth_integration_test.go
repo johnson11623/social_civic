@@ -54,6 +54,8 @@ func newAuthFixture(t *testing.T) *authFixture {
 
 func (a *authFixture) advance(d time.Duration) { a.mu.Lock(); a.now = a.now.Add(d); a.mu.Unlock() }
 
+func (a *authFixture) clock() time.Time { a.mu.Lock(); defer a.mu.Unlock(); return a.now }
+
 func (a *authFixture) do(t *testing.T, h http.HandlerFunc, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	raw, _ := json.Marshal(body)
