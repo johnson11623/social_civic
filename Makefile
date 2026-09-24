@@ -30,7 +30,7 @@ N ?= 1
 .PHONY: help db-up db-down db-reset db-logs db-ps db-psql db-url \
         migrate-up migrate-down migrate-down-all migrate-version migrate-force migrate-create \
         test-db test-db-up test-db-run test-db-down test-db-psql \
-        db-seed run-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
+        db-seed run-api test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
 
 # Development-only secrets for run-api. Production uses KMS/Vault (T-X.4).
 DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
@@ -122,6 +122,10 @@ run-api: db-up migrate-up db-seed ## Run the API against the dev database (dev-o
 	JWT_SIGNING_KEY="$(DEV_JWT_SIGNING_KEY)" \
 	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)" \
 	go run ./cmd/api
+
+test-api: ## Run the Postman collection with Newman against a running API (make run-api)
+	docker run --rm -v "$(CURDIR)/api/postman":/etc/newman postman/newman:6-alpine \
+		run civic-platform.postman_collection.json --env-var baseUrl=http://host.docker.internal:8090
 
 build: ## Build all binaries into bin/
 	go build -trimpath -o bin/ ./cmd/...
