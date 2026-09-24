@@ -7,6 +7,10 @@ import { Drawer } from "@/components/ui/Drawer";
 import { useToast } from "@/components/ui/Toast";
 import { describeError, type Settled } from "@/lib/api-errors";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { useDeferredWide } from "@/lib/use-deferred-wide";
+
+// Wide screens only, once the browser is idle: never part of the first paint.
+const ContextRail = lazy(() => import("./ContextRail"));
 
 // Loaded on first use: not needed for the first paint (3G budget).
 const CreateChannelModal = lazy(() =>
@@ -34,6 +38,7 @@ export function WardShell({ channels, activeChannelId, activeLevel, isModerator 
 	const navigate = useNavigate();
 	const [drawer, setDrawer] = useState(false);
 	const [creating, setCreating] = useState(false);
+	const wide = useDeferredWide();
 
 	const onCreated = async (channel: Channel) => {
 		setCreating(false);
@@ -62,7 +67,7 @@ export function WardShell({ channels, activeChannelId, activeLevel, isModerator 
 		);
 
 	return (
-		<div className="mx-auto flex max-w-7xl gap-6 px-4 lg:px-6">
+		<div className="mx-auto flex max-w-7xl gap-6 px-4 lg:px-6 xl:max-w-screen-2xl">
 			<aside className="sticky top-0 hidden max-h-dvh w-72 shrink-0 self-start overflow-y-auto border-r border-border bg-surface lg:block">
 				{sidebar(false)}
 			</aside>
@@ -79,6 +84,17 @@ export function WardShell({ channels, activeChannelId, activeLevel, isModerator 
 				</button>
 				{children}
 			</div>
+			{/* Space reserved from the first render (xl+), so filling it later shifts nothing. */}
+			<aside
+				aria-label={t("rail.label")}
+				className="sticky top-0 hidden max-h-dvh w-80 shrink-0 self-start overflow-y-auto xl:block"
+			>
+				{wide && (
+					<Suspense>
+						<ContextRail channels={channels.ok ? channels.value : undefined} />
+					</Suspense>
+				)}
+			</aside>
 			<Drawer open={drawer} onClose={() => setDrawer(false)} title={t("sidebar.channels")}>
 				{drawer && sidebar(true)}
 			</Drawer>

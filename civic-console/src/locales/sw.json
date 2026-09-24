@@ -307,5 +307,12 @@
 	"account.erasureKept": "Tunachohifadhi, na kwa nini:",
 	"account.erasureHome": "Nenda ukurasa wa nyumbani",
 	"common.cancel": "Ghairi",
-	"footer.language": "Lugha"
+	"footer.language": "Lugha",
+	"rail.label": "Zaidi kutoka eneo lako",
+	"rail.houseTitle": "Wafikie wakazi wa kaunti yako",
+	"rail.houseBody": "Mashirika ya kiraia yaliyothibitishwa yanaweza kufadhili ujumbe hapa. Unaonyeshwa kwa eneo — kamwe si kwa kile unachosoma au kupenda.",
+	"rail.ward": "Wadi yako kwa ufupi",
+	"rail.channels": "Chaneli {count}",
+	"rail.levelsTitle": "Jinsi machapisho yanavyopanda",
+	"rail.levelsBody": "Kila chapisho huanzia katika wadi yake. Majirani wanapoliona lina manufaa — mapendezi, majibu, watu wengi tofauti wakishiriki — hupanda hadi eneo bunge, kisha kaunti, kisha taifa."
 }

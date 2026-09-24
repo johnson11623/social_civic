@@ -307,5 +307,12 @@
 	"account.erasureKept": "What we keep, and why:",
 	"account.erasureHome": "Go to the home page",
 	"common.cancel": "Cancel",
-	"footer.language": "Language"
+	"footer.language": "Language",
+	"rail.label": "More from your area",
+	"rail.houseTitle": "Reach your county",
+	"rail.houseBody": "Verified civic organisations can sponsor messages here. They're shown by area — never by what you read or like.",
+	"rail.ward": "Your ward at a glance",
+	"rail.channels": "{count} channels",
+	"rail.levelsTitle": "How posts rise",
+	"rail.levelsBody": "Every post starts in its ward. When neighbours find it useful — likes, replies, many different people taking part — it rises to the constituency, then the county, then the nation."
 }
