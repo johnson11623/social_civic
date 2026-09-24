@@ -179,6 +179,7 @@ func run(logger *slog.Logger) error {
 	erasure := &identity.ErasureHandlers{Store: identityStore, Logger: logger, Now: time.Now}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
 	requireConsent := identity.RequireConsent(identityStore, logger)
+	profile := &identity.ProfileHandlers{Pool: pool, Boundary: tree, Logger: logger}
 	mfa := &identity.MFAHandlers{Pool: pool, Keyring: keyring, Tokens: tokens, Logger: logger, Now: time.Now}
 	roles := &membership.Handlers{Store: membership.NewStore(pool), Logger: logger, Now: time.Now}
 	channels := &post.ChannelHandlers{Store: post.NewStore(pool), Wards: tree, Logger: logger}
@@ -215,6 +216,8 @@ func run(logger *slog.Logger) error {
 	// F-08 — TOTP enrolment and step-up; 5 codes per 15 minutes per user.
 	mfaLimit := perUser("mfa", 5, 15*time.Minute)
 	requireMFA := authn.RequireMFA(identity.MFARequired)
+	r.With(requireAuth).Get("/v1/users/me", profile.Get)
+	r.With(requireAuth, perUser("profile", 20, time.Hour)).Patch("/v1/users/me", profile.Update)
 	r.With(requireAuth).Get("/v1/users/me/mfa", mfa.Status)
 	r.With(requireAuth, mfaLimit).Post("/v1/users/me/mfa/totp", mfa.Enrol)
 	r.With(requireAuth, mfaLimit).Post("/v1/users/me/mfa/totp/verify", mfa.Activate)

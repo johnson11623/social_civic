@@ -130,6 +130,35 @@ func (q *Queries) GetMFA(ctx context.Context, userID int64) (GetMFARow, error) {
 	return i, err
 }
 
+const getProfile = `-- name: GetProfile :one
+SELECT id, public_id, display_name, preferred_lang, ward_id, created_at
+FROM users
+WHERE public_id = $1 AND state = 1
+`
+
+type GetProfileRow struct {
+	ID            int64
+	PublicID      uuid.UUID
+	DisplayName   string
+	PreferredLang string
+	WardID        int32
+	CreatedAt     time.Time
+}
+
+func (q *Queries) GetProfile(ctx context.Context, publicID uuid.UUID) (GetProfileRow, error) {
+	row := q.db.QueryRow(ctx, getProfile, publicID)
+	var i GetProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.PublicID,
+		&i.DisplayName,
+		&i.PreferredLang,
+		&i.WardID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getRefreshTokenForUpdate = `-- name: GetRefreshTokenForUpdate :one
 SELECT jti, user_id, family_id, expires_at, revoked_at, revoke_reason
 FROM refresh_tokens
@@ -473,6 +502,33 @@ func (q *Queries) StartMFAEnrolment(ctx context.Context, arg StartMFAEnrolmentPa
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const updateProfile = `-- name: UpdateProfile :one
+UPDATE users
+SET display_name   = COALESCE($1, display_name),
+    preferred_lang = COALESCE($2, preferred_lang),
+    updated_at     = now()
+WHERE id = $3 AND state = 1
+RETURNING display_name, preferred_lang
+`
+
+type UpdateProfileParams struct {
+	DisplayName   pgtype.Text
+	PreferredLang pgtype.Text
+	ID            int64
+}
+
+type UpdateProfileRow struct {
+	DisplayName   string
+	PreferredLang string
+}
+
+func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (UpdateProfileRow, error) {
+	row := q.db.QueryRow(ctx, updateProfile, arg.DisplayName, arg.PreferredLang, arg.ID)
+	var i UpdateProfileRow
+	err := row.Scan(&i.DisplayName, &i.PreferredLang)
+	return i, err
 }
 
 const withdrawConsent = `-- name: WithdrawConsent :one

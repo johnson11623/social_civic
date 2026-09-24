@@ -67,3 +67,6 @@ SELECT request_id, user_id, state, requested_at, completion_by, overdue,
        unfinished_steps, failed_steps, last_error
 FROM dpo_incomplete_erasures
 ORDER BY overdue DESC, completion_by;
+
+-- name: GetOpenErasure :one
+SELECT public_id, state, requested_at, completion_by FROM erasure_requests WHERE user_id = $1 AND state IN (1, 3);

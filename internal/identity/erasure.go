@@ -37,6 +37,7 @@ const (
 	maxErasureReasonRunes  = 500
 	erasureStatePending    = 1
 	erasureStateCompleted  = 2
+	erasureStateFailed     = 3 // needs DPO action
 	erasureStepStateFailed = 3
 	deletedUserDisplayName = "[deleted user]"
 	erasedKeyVersion       = "erased"

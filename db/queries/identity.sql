@@ -113,3 +113,16 @@ WHERE user_id = sqlc.arg(user_id) AND last_step < sqlc.arg(step);
 
 -- name: DeleteMFA :exec
 DELETE FROM user_mfa WHERE user_id = $1;
+
+-- name: GetProfile :one
+SELECT id, public_id, display_name, preferred_lang, ward_id, created_at
+FROM users
+WHERE public_id = $1 AND state = 1;
+
+-- name: UpdateProfile :one
+UPDATE users
+SET display_name   = COALESCE(sqlc.narg(display_name), display_name),
+    preferred_lang = COALESCE(sqlc.narg(preferred_lang), preferred_lang),
+    updated_at     = now()
+WHERE id = sqlc.arg(id) AND state = 1
+RETURNING display_name, preferred_lang;

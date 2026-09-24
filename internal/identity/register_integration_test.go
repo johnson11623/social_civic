@@ -25,7 +25,7 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(context.Background(), "TRUNCATE users, consents, verification_attempts, outbox, otp_challenges, refresh_tokens, erasure_requests, erasure_steps RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(context.Background(), "TRUNCATE users, consents, verification_attempts, outbox, otp_challenges, refresh_tokens, erasure_requests, erasure_steps, user_mfa RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("reset tables (is the database migrated?): %v", err)
 	}
 	return pool

@@ -27,6 +27,8 @@ type Querier interface {
 	GetActiveOTPForUpdate(ctx context.Context, userID int64) (GetActiveOTPForUpdateRow, error)
 	GetConsent(ctx context.Context, arg GetConsentParams) (GetConsentRow, error)
 	GetMFA(ctx context.Context, userID int64) (GetMFARow, error)
+	GetOpenErasure(ctx context.Context, userID int64) (GetOpenErasureRow, error)
+	GetProfile(ctx context.Context, publicID uuid.UUID) (GetProfileRow, error)
 	GetRefreshTokenForUpdate(ctx context.Context, jti uuid.UUID) (GetRefreshTokenForUpdateRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	GetUserByNationalIDHash(ctx context.Context, nationalIDHash []byte) (GetUserByNationalIDHashRow, error)
@@ -50,6 +52,7 @@ type Querier interface {
 	ScrubConsentIPs(ctx context.Context, userID int64) error
 	// A new pending secret replaces an unfinished enrolment, never an enabled one.
 	StartMFAEnrolment(ctx context.Context, arg StartMFAEnrolmentParams) (int64, error)
+	UpdateProfile(ctx context.Context, arg UpdateProfileParams) (UpdateProfileRow, error)
 	WithdrawConsent(ctx context.Context, arg WithdrawConsentParams) (*time.Time, error)
 }
 

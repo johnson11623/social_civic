@@ -123,6 +123,29 @@ func (q *Queries) FailErasureRequest(ctx context.Context, id int64) error {
 	return err
 }
 
+const getOpenErasure = `-- name: GetOpenErasure :one
+SELECT public_id, state, requested_at, completion_by FROM erasure_requests WHERE user_id = $1 AND state IN (1, 3)
+`
+
+type GetOpenErasureRow struct {
+	PublicID     uuid.UUID
+	State        int16
+	RequestedAt  time.Time
+	CompletionBy time.Time
+}
+
+func (q *Queries) GetOpenErasure(ctx context.Context, userID int64) (GetOpenErasureRow, error) {
+	row := q.db.QueryRow(ctx, getOpenErasure, userID)
+	var i GetOpenErasureRow
+	err := row.Scan(
+		&i.PublicID,
+		&i.State,
+		&i.RequestedAt,
+		&i.CompletionBy,
+	)
+	return i, err
+}
+
 const insertErasureRequest = `-- name: InsertErasureRequest :one
 INSERT INTO erasure_requests (public_id, user_id, reason, requested_at, ack_by, completion_by)
 VALUES ($1, $2, $3, $4, $5, $6)
