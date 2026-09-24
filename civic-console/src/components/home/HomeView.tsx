@@ -70,7 +70,11 @@ function SignedIn({
 	const logout = useLogout();
 	const [busy, setBusy] = useState(false);
 	return (
-		<WardShell channels={home.channels} activeLevel={urlLevel ?? home.level}>
+		<WardShell
+			channels={home.channels}
+			activeLevel={urlLevel ?? home.level}
+			isModerator={home.isModerator ?? false}
+		>
 			<div className="mx-auto flex max-w-2xl flex-col gap-4 py-6">
 				<div className="flex flex-wrap items-center justify-between gap-2">
 					<h1 className="text-h1">{t("feed.title")}</h1>

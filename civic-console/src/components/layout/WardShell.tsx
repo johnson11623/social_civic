@@ -17,6 +17,8 @@ type Props = {
 	channels: Settled<ChannelList>;
 	activeChannelId?: string | undefined;
 	activeLevel?: Level | undefined;
+	/** Show the moderation queue link. */
+	isModerator?: boolean;
 	children: ReactNode;
 };
 
@@ -25,7 +27,7 @@ type Props = {
  * the content. Below lg: a "Channels" button opens the same sidebar as a
  * drawer (T-W2.1.1.4). Creating a channel adds it and opens it (T-W2.1.2.5).
  */
-export function WardShell({ channels, activeChannelId, activeLevel, children }: Props) {
+export function WardShell({ channels, activeChannelId, activeLevel, isModerator = false, children }: Props) {
 	const { t } = useT();
 	const toast = useToast();
 	const router = useRouter();
@@ -50,6 +52,7 @@ export function WardShell({ channels, activeChannelId, activeLevel, children }: 
 				activeChannelId={activeChannelId}
 				activeLevel={activeLevel}
 				onCreate={() => setCreating(true)}
+				isModerator={isModerator}
 				onNavigate={inDrawer ? () => setDrawer(false) : undefined}
 			/>
 		) : (

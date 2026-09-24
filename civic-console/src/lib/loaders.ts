@@ -4,7 +4,7 @@
  * fetcher from a component module would pull that whole UI into the first
  * download and defeat route code-splitting (3G budget).
  */
-import type { Level } from "@/api/api-contract";
+import type { Level, QueueParams } from "@/api/api-contract";
 import { settle } from "@/lib/api-errors";
 import { callApiEither } from "@/runtimes/get-runtime";
 
@@ -34,3 +34,8 @@ export const fetchChannelPosts = (channelId: string, cursor?: string) =>
 	).then(settle);
 
 export const fetchChannels = () => callApiEither((api) => api.posts.channels()).then(settle);
+
+export const fetchRoles = () => callApiEither((api) => api.moderation.roles()).then(settle);
+
+export const fetchQueue = (urlParams: QueueParams) =>
+	callApiEither((api) => api.moderation.queue({ urlParams })).then(settle);

@@ -28,6 +28,7 @@ export function describeError(error: unknown, t: T): string {
 		case "Unauthorized":
 		case "Conflict":
 		case "ValidationFailed":
+		case "UpstreamError":
 			return e.detail || t("error.generic");
 		case "RequestError":
 			return t("error.offline");

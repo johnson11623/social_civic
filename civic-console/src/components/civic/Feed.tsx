@@ -19,6 +19,7 @@ type Props = {
 	pendingIds: ReadonlySet<string>;
 	onLike: (post: Post) => void;
 	onWhy: (post: Post) => void;
+	onReport?: ((post: Post) => void) | undefined;
 };
 
 /**
@@ -85,6 +86,7 @@ export function Feed(props: Props) {
 						linkThread
 						onLike={props.onLike}
 						onWhy={props.onWhy}
+						onReport={props.onReport}
 					/>
 				))}
 			</div>

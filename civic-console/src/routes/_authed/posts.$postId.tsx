@@ -21,6 +21,7 @@ export const Route = createFileRoute("/_authed/posts/$postId")({
 
 function PostPage() {
 	const { post, thread } = Route.useLoaderData();
+	const { session } = Route.useRouteContext();
 	const { t } = useT();
 	return (
 		<main id="main" className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-6">
@@ -33,7 +34,7 @@ function PostPage() {
 			</Link>
 			<h1 className="sr-only">{t("post.title")}</h1>
 			{post.ok && thread ? (
-				<PostDetail key={post.value.postId} post={post.value} thread={thread} />
+				<PostDetail key={post.value.postId} post={post.value} thread={thread} viewerId={session?.subject} />
 			) : (
 				<p role="alert" className="rounded-md border border-border p-4 text-body">
 					{post.ok || post.error._tag === "UpstreamError"

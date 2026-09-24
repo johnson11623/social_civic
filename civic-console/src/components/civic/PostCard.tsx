@@ -8,6 +8,7 @@ import { formatDate, formatRelative } from "@/lib/format";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { ElevationBanner } from "./ElevationBanner";
 import { InteractionBar } from "./InteractionBar";
+import { ModerationNotice } from "./ModerationNotice";
 import { SponsoredLabel } from "./SponsoredLabel";
 
 type Props = {
@@ -18,6 +19,11 @@ type Props = {
 	pending?: boolean;
 	/** Link the reply count to the thread (feed cards; not the detail page). */
 	linkThread?: boolean;
+	/** Offer "Report" (EPIC 3.1.1). */
+	onReport?: ((post: Post) => void) | undefined;
+	/** The viewer wrote this post: removed/frozen notices offer the appeal. */
+	viewerIsAuthor?: boolean;
+	onAppeal?: ((post: Post) => void) | undefined;
 };
 
 /**
@@ -34,17 +40,28 @@ export const PostCard = memo(function PostCard({
 	onWhy,
 	pending = false,
 	linkThread = false,
+	onReport,
+	viewerIsAuthor = false,
+	onAppeal,
 }: Props) {
 	const { t, lang } = useT();
 	const name = post.author?.displayName ?? "—";
 
+	const notice = (post.state === "tombstoned" || post.state === "frozen") && post.moderation && (
+		<ModerationNotice
+			post={post}
+			canAppeal={viewerIsAuthor}
+			onAppeal={onAppeal ? () => onAppeal(post) : undefined}
+		/>
+	);
 	if (post.state === "tombstoned" || post.content === null) {
 		return (
-			<article className="rounded-md border border-border bg-surface p-4 text-small text-muted">
-				{t("post.removed")}
+			<article className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4 text-small text-muted">
+				{notice || t("post.removed")}
 			</article>
 		);
 	}
+	const frozen = post.state === "frozen";
 
 	return (
 		<article
@@ -76,24 +93,38 @@ export const PostCard = memo(function PostCard({
 			</header>
 			{post.sponsored && post.sponsoredLabel && <SponsoredLabel label={post.sponsoredLabel} />}
 			{post.level !== "ward" && <ElevationBanner level={post.level} onWhy={() => onWhy(post)} />}
+			{notice}
 			<p className="whitespace-pre-wrap break-words text-body text-ink">{post.content}</p>
 			<InteractionBar
 				likes={post.counts.likes}
 				replies={post.counts.replies}
 				liked={post.liked ?? false}
 				onLike={() => onLike(post)}
-				disabled={pending}
+				disabled={pending || frozen}
 				threadOf={linkThread && !pending ? post.postId : undefined}
 				trailing={
-					post.level === "ward" && !pending ? (
-						<button
-							type="button"
-							onClick={() => onWhy(post)}
-							className="min-h-11 rounded-sm px-2 text-small text-muted underline-offset-2 hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent"
-						>
-							{t("post.why")}
-						</button>
-					) : undefined
+					pending ? undefined : (
+						<div className="flex items-center">
+							{post.level === "ward" && (
+								<button
+									type="button"
+									onClick={() => onWhy(post)}
+									className="min-h-11 rounded-sm px-2 text-small text-muted underline-offset-2 hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent"
+								>
+									{t("post.why")}
+								</button>
+							)}
+							{onReport && (
+								<button
+									type="button"
+									onClick={() => onReport(post)}
+									className="min-h-11 rounded-sm px-2 text-small text-muted hover:text-danger focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent"
+								>
+									{t("post.report")}
+								</button>
+							)}
+						</div>
+					)
 				}
 			/>
 		</article>

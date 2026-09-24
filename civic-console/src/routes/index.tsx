@@ -3,7 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import type { Level } from "@/api/api-contract";
 import { type HomeLoaderData, HomeView } from "@/components/home/HomeView";
 import { isLevel } from "@/lib/levels";
-import { fetchChannels, fetchFeed } from "@/lib/loaders";
+import { fetchChannels, fetchFeed, fetchRoles } from "@/lib/loaders";
+import { moderatedLevels } from "@/lib/moderation";
 import { callApiPromise } from "@/runtimes/get-runtime";
 
 type HomeSearch = { level?: Level };
@@ -20,8 +21,9 @@ export const Route = createFileRoute("/")({
 		const session = await callApiPromise((api) => api.auth.session());
 		if (!session.authenticated) return { session };
 		const level = (location.search as HomeSearch).level ?? "ward";
-		const [feed, channels] = await Promise.all([fetchFeed(level), fetchChannels()]);
-		return { session, home: { level, feed, channels } };
+		const [feed, channels, roles] = await Promise.all([fetchFeed(level), fetchChannels(), fetchRoles()]);
+		const isModerator = roles.ok && moderatedLevels(roles.value.items).length > 0;
+		return { session, home: { level, feed, channels, isModerator } };
 	},
 	component: Home,
 });

@@ -9,6 +9,7 @@ import { formatNumber } from "@/lib/format";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { fetchChannelPosts } from "@/lib/loaders";
 import { useLikeToggle } from "@/lib/use-like";
+import { useReportDialog } from "@/lib/use-report";
 import { callApiEither } from "@/runtimes/get-runtime";
 import { categoryDot } from "./ChannelItem";
 import { Composer } from "./Composer";
@@ -38,6 +39,7 @@ export function ChannelView({ channel, posts: initial }: Props) {
 		setPosts((all) => all.map((p) => (p.postId === postId ? change(p) : p)));
 	}, []);
 	const onLike = useLikeToggle(update);
+	const [onReport, reportDialog] = useReportDialog();
 	const onWhy = useCallback((p: Post) => setWhy(p), []);
 
 	const reload = async () => {
@@ -135,8 +137,10 @@ export function ChannelView({ channel, posts: initial }: Props) {
 				pendingIds={pendingIds}
 				onLike={onLike}
 				onWhy={onWhy}
+				onReport={onReport}
 			/>
 			<WhyModal post={why} onClose={() => setWhy(null)} />
+			{reportDialog}
 		</div>
 	);
 }

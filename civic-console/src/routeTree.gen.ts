@@ -14,6 +14,7 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as JoinRouteImport } from './routes/join'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedAccountRouteImport } from './routes/_authed/account'
+import { Route as AuthedModerationRouteImport } from './routes/_authed/moderation'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as AuthedChannelsChannelIdRouteImport } from './routes/_authed/channels.$channelId'
 import { Route as AuthedPostsPostIdRouteImport } from './routes/_authed/posts.$postId'
@@ -42,6 +43,11 @@ const AuthedAccountRoute = AuthedAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedModerationRoute = AuthedModerationRouteImport.update({
+  id: '/moderation',
+  path: '/moderation',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
   id: '/api/$',
   path: '/api/$',
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/account': typeof AuthedAccountRoute
+  '/moderation': typeof AuthedModerationRoute
   '/api/$': typeof ApiSplatRoute
   '/channels/$channelId': typeof AuthedChannelsChannelIdRoute
   '/posts/$postId': typeof AuthedPostsPostIdRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByTo {
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/account': typeof AuthedAccountRoute
+  '/moderation': typeof AuthedModerationRoute
   '/api/$': typeof ApiSplatRoute
   '/channels/$channelId': typeof AuthedChannelsChannelIdRoute
   '/posts/$postId': typeof AuthedPostsPostIdRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/_authed/account': typeof AuthedAccountRoute
+  '/_authed/moderation': typeof AuthedModerationRoute
   '/api/$': typeof ApiSplatRoute
   '/_authed/channels/$channelId': typeof AuthedChannelsChannelIdRoute
   '/_authed/posts/$postId': typeof AuthedPostsPostIdRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
     | '/join'
     | '/login'
     | '/account'
+    | '/moderation'
     | '/api/$'
     | '/channels/$channelId'
     | '/posts/$postId'
@@ -103,6 +113,7 @@ export interface FileRouteTypes {
     | '/join'
     | '/login'
     | '/account'
+    | '/moderation'
     | '/api/$'
     | '/channels/$channelId'
     | '/posts/$postId'
@@ -113,6 +124,7 @@ export interface FileRouteTypes {
     | '/join'
     | '/login'
     | '/_authed/account'
+    | '/_authed/moderation'
     | '/api/$'
     | '/_authed/channels/$channelId'
     | '/_authed/posts/$postId'
@@ -163,6 +175,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAccountRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/moderation': {
+      id: '/_authed/moderation'
+      path: '/moderation'
+      fullPath: '/moderation'
+      preLoaderRoute: typeof AuthedModerationRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/api/$': {
       id: '/api/$'
       path: '/api/$'
@@ -189,12 +208,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthedRouteChildren {
   AuthedAccountRoute: typeof AuthedAccountRoute
+  AuthedModerationRoute: typeof AuthedModerationRoute
   AuthedChannelsChannelIdRoute: typeof AuthedChannelsChannelIdRoute
   AuthedPostsPostIdRoute: typeof AuthedPostsPostIdRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAccountRoute: AuthedAccountRoute,
+  AuthedModerationRoute: AuthedModerationRoute,
   AuthedChannelsChannelIdRoute: AuthedChannelsChannelIdRoute,
   AuthedPostsPostIdRoute: AuthedPostsPostIdRoute,
 }

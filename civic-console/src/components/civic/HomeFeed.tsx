@@ -6,6 +6,7 @@ import { describeError, type Settled, settle } from "@/lib/api-errors";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { fetchFeed } from "@/lib/loaders";
 import { useLikeToggle } from "@/lib/use-like";
+import { useReportDialog } from "@/lib/use-report";
 import { callApiEither } from "@/runtimes/get-runtime";
 import { Composer } from "./Composer";
 import { Feed } from "./Feed";
@@ -16,6 +17,8 @@ export type HomeData = {
 	level: Level;
 	feed: Settled<FeedPage>;
 	channels: Settled<ChannelList>;
+	/** Show the moderation queue link. */
+	isModerator?: boolean;
 };
 
 type Props = HomeData & {
@@ -109,6 +112,7 @@ export function HomeFeed({ level: initialLevel, urlLevel, feed, channels, onLeve
 	}, []);
 
 	const onLike = useLikeToggle(update);
+	const [onReport, reportDialog] = useReportDialog();
 
 	const onWhy = useCallback((post: Post) => setWhy(post), []);
 
@@ -182,9 +186,11 @@ export function HomeFeed({ level: initialLevel, urlLevel, feed, channels, onLeve
 					pendingIds={pendingIds}
 					onLike={onLike}
 					onWhy={onWhy}
+					onReport={onReport}
 				/>
 			</section>
 			<WhyModal post={why} onClose={() => setWhy(null)} />
+			{reportDialog}
 		</div>
 	);
 }

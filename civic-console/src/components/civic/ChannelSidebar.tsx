@@ -16,6 +16,7 @@ type Props = {
 	onCreate: () => void;
 	/** Called when a link is followed (closes the mobile drawer). */
 	onNavigate?: (() => void) | undefined;
+	isModerator?: boolean;
 };
 
 /**
@@ -23,7 +24,14 @@ type Props = {
  * (T-W2.1.1.1), its channels (T-W2.1.1.2), and the four levels with the
  * 4-dot motif (T-W2.1.1.3).
  */
-export function ChannelSidebar({ channels, activeChannelId, activeLevel, onCreate, onNavigate }: Props) {
+export function ChannelSidebar({
+	channels,
+	activeChannelId,
+	activeLevel,
+	onCreate,
+	onNavigate,
+	isModerator = false,
+}: Props) {
 	const { t, lang } = useT();
 	const ward = channels.ward;
 	return (
@@ -89,6 +97,17 @@ export function ChannelSidebar({ channels, activeChannelId, activeLevel, onCreat
 					))}
 				</ul>
 			</nav>
+
+			{isModerator && (
+				<Link
+					to="/moderation"
+					onClick={onNavigate}
+					activeProps={{ "aria-current": "page", className: "bg-surface-2 font-medium" }}
+					className="flex min-h-11 items-center gap-3 rounded-sm border-t border-border px-3 pt-4 text-body text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent lg:min-h-9"
+				>
+					{t("mod.link")}
+				</Link>
+			)}
 		</div>
 	);
 }

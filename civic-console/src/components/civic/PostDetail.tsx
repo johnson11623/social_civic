@@ -1,27 +1,36 @@
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 
 import type { Post, ThreadPage } from "@/api/api-contract";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { describeError, type Settled, settle } from "@/lib/api-errors";
+import { formatDate } from "@/lib/format";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { fetchThread } from "@/lib/loaders";
 import { useLikeToggle } from "@/lib/use-like";
+import { useReportDialog } from "@/lib/use-report";
 import { callApiEither } from "@/runtimes/get-runtime";
 import { LazyWhyModal as WhyModal } from "./LazyWhyModal";
 import { PostCard } from "./PostCard";
 import { ReplyComposer } from "./ReplyComposer";
 import { ReplyThread } from "./ReplyThread";
 
-type Props = { post: Post; thread: Settled<ThreadPage> };
+type Props = {
+	post: Post;
+	thread: Settled<ThreadPage>;
+	/** The signed-in user's public id: authors may appeal decisions. */
+	viewerId?: string | undefined;
+};
+
+const AppealModal = lazy(() => import("./AppealModal").then((m) => ({ default: m.AppealModal })));
 
 /**
  * W1.4.3 — a post with its whole conversation: nested replies, an inline
  * reply box under the post and under each reply, optimistic like and reply.
  */
-export function PostDetail({ post: initialPost, thread }: Props) {
-	const { t } = useT();
+export function PostDetail({ post: initialPost, thread, viewerId }: Props) {
+	const { t, lang } = useT();
 	const toast = useToast();
 	const [post, setPost] = useState(initialPost);
 	const [replies, setReplies] = useState<readonly Post[]>(thread.ok ? thread.value.items : []);
@@ -41,6 +50,9 @@ export function PostDetail({ post: initialPost, thread }: Props) {
 		[initialPost.postId],
 	);
 	const onLike = useLikeToggle(update);
+	const [onReport, reportDialog] = useReportDialog();
+	const [appealing, setAppealing] = useState(false);
+	const [appealDue, setAppealDue] = useState<string>();
 	const onWhy = useCallback((p: Post) => setWhy(p), []);
 
 	const loadMore = async () => {
@@ -107,7 +119,19 @@ export function PostDetail({ post: initialPost, thread }: Props) {
 
 	return (
 		<div className="flex flex-col gap-6">
-			<PostCard post={post} onLike={onLike} onWhy={onWhy} />
+			<PostCard
+				post={post}
+				onLike={onLike}
+				onWhy={onWhy}
+				onReport={post.state === "active" || post.state === "frozen" ? onReport : undefined}
+				viewerIsAuthor={!appealDue && viewerId !== undefined && post.author?.publicId === viewerId}
+				onAppeal={() => setAppealing(true)}
+			/>
+			{appealDue && (
+				<p role="status" className="rounded-md bg-elevated p-3 text-small text-ink">
+					{t("appeal.filed", { date: formatDate(appealDue, lang) })}
+				</p>
+			)}
 			{post.state === "active" && (
 				<ReplyComposer label={t("reply.label")} onSubmit={(content) => onReply(post, content)} />
 			)}
@@ -145,6 +169,19 @@ export function PostDetail({ post: initialPost, thread }: Props) {
 				)}
 			</section>
 			<WhyModal post={why} onClose={() => setWhy(null)} />
+			{reportDialog}
+			{appealing && (
+				<Suspense>
+					<AppealModal
+						post={post}
+						onClose={() => setAppealing(false)}
+						onFiled={(due) => {
+							setAppealing(false);
+							setAppealDue(due);
+						}}
+					/>
+				</Suspense>
+			)}
 		</div>
 	);
 }

@@ -9,15 +9,21 @@ import { HttpApiBuilder, HttpServerRequest } from "@effect/platform";
 import { Effect, Layer, Schema } from "effect";
 
 import {
+	ActionRecorded,
 	ApiContract,
+	AppealFiled,
 	BoundaryTree,
 	Channel,
 	ChannelList,
 	ChannelPostsPage,
 	FeedPage,
 	Group,
+	History,
 	LikeState,
 	Post,
+	Queue,
+	ReportFiled,
+	RoleList,
 	SearchResponse,
 	type Session,
 	ThreadPage,
@@ -371,6 +377,99 @@ const PostsLive = HttpApiBuilder.group(ApiContract, "posts", (handlers) =>
 		),
 );
 
+const ModerationLive = HttpApiBuilder.group(ApiContract, "moderation", (handlers) =>
+	handlers
+		.handle("roles", () =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get("/v1/users/me/roles", RoleList, yield* authedContext);
+			}).pipe(Effect.catchTags(narrowTo("Unauthorized", "BackendUnavailable", "UpstreamError"))),
+		)
+		.handle("report", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post("/v1/reports", ReportFiled, {
+					...(yield* authedContext),
+					body: { post_id: payload.postId, reason_code: payload.reasonCode, details: payload.details ?? "" },
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo(
+						"Unauthorized",
+						"Conflict",
+						"ValidationFailed",
+						"RateLimited",
+						"BackendUnavailable",
+						"UpstreamError",
+					),
+				),
+			),
+		)
+		.handle("queue", ({ urlParams }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get("/v1/moderation/queue", Queue, { urlParams, ...(yield* authedContext) });
+			}).pipe(
+				Effect.catchTags(narrowTo("Unauthorized", "ValidationFailed", "BackendUnavailable", "UpstreamError")),
+			),
+		)
+		.handle("act", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post("/v1/moderation/actions", ActionRecorded, {
+					...(yield* authedContext),
+					body: {
+						post_id: payload.postId,
+						action: payload.action,
+						reason_code: payload.reasonCode,
+						notes: payload.notes ?? "",
+					},
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo(
+						"Unauthorized",
+						"Conflict",
+						"ValidationFailed",
+						"RateLimited",
+						"BackendUnavailable",
+						"UpstreamError",
+					),
+				),
+			),
+		)
+		.handle("history", ({ path }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get(
+					`/v1/posts/${encodeURIComponent(path.postId)}/moderation`,
+					History,
+					yield* authedContext,
+				);
+			}).pipe(Effect.catchTags(narrowTo("Unauthorized", "BackendUnavailable", "UpstreamError"))),
+		)
+		.handle("appeal", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post("/v1/appeals", AppealFiled, {
+					...(yield* authedContext),
+					body: { moderation_id: payload.moderationId, statement: payload.statement },
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo(
+						"Unauthorized",
+						"Conflict",
+						"ValidationFailed",
+						"RateLimited",
+						"BackendUnavailable",
+						"UpstreamError",
+					),
+				),
+			),
+		),
+);
+
 /**
  * Keep the errors an endpoint declares; report any other platform error as
  * UpstreamError so the contract's error types stay exact.
@@ -409,5 +508,5 @@ function narrowTo<const K extends Tag>(...keep: K[]) {
 }
 
 export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(
-	Layer.provide([SystemLive, BoundaryLive, AuthLive, PostsLive]),
+	Layer.provide([SystemLive, BoundaryLive, AuthLive, PostsLive, ModerationLive]),
 );

@@ -271,6 +271,16 @@ export const Post = Schema.Struct({
 	liked: Schema.optionalWith(Schema.Boolean, { exact: true }),
 	sponsored: Schema.Boolean,
 	sponsoredLabel: Schema.optionalWith(SponsorLabel, { exact: true }).pipe(Schema.fromKey("sponsored_label")),
+	/** Frozen or removed: the decision, its harm and the appeal deadline. */
+	moderation: Schema.optionalWith(
+		Schema.Struct({
+			actionId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("action_id")),
+			action: Schema.String,
+			reasonCode: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("reason_code")),
+			appealDueAt: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("appeal_due_at")),
+		}),
+		{ exact: true },
+	),
 	rootId: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("root_id")),
 	parentId: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("parent_id")),
 	createdAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("created_at")),
@@ -485,6 +495,157 @@ export class PostsGroup extends HttpApiGroup.make("posts")
 			.addError(UpstreamError),
 	) {}
 
+// ---- Moderation (W2.2) ------------------------------------------------------------
+
+/** The platform's harm-based policy: the only grounds to report or remove. */
+export const ReasonCode = Schema.Literal("hate_speech", "incitement", "privacy", "child_safety");
+export type ReasonCode = typeof ReasonCode.Type;
+
+export const RoleAssignment = Schema.Struct({
+	assignmentId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("assignment_id")),
+	role: Schema.String,
+	/** Moderator roles: the level governed (1 ward … 4 national). */
+	level: Schema.optionalWith(Schema.Int, { exact: true }),
+	unitCode: Schema.optionalWith(Schema.Int, { exact: true }).pipe(Schema.fromKey("unit_code")),
+});
+export type RoleAssignment = typeof RoleAssignment.Type;
+export const RoleList = Schema.Struct({ items: Schema.Array(RoleAssignment) });
+
+export const ReportPayload = Schema.Struct({
+	postId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("post_id")),
+	reasonCode: Schema.propertySignature(ReasonCode).pipe(Schema.fromKey("reason_code")),
+	details: Schema.optionalWith(Schema.String.pipe(Schema.maxLength(1000)), { exact: true }),
+});
+export const ReportFiled = Schema.Struct({
+	reportId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("report_id")),
+	state: Schema.String,
+	queue: Schema.String,
+});
+
+export const QueueParams = Schema.Struct({
+	level: Schema.optional(FeedLevel),
+	filter: Schema.optional(Schema.Literal("open", "triage", "all")),
+	sort: Schema.optional(Schema.Literal("age", "reports")),
+});
+export type QueueParams = typeof QueueParams.Type;
+
+export const QueueItem = Schema.Struct({
+	postId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("post_id")),
+	level: LevelFromInt,
+	wardId: Schema.propertySignature(Schema.Int).pipe(Schema.fromKey("ward_id")),
+	content: Schema.NullOr(Schema.String),
+	state: PostState,
+	author: Author,
+	reportCount: Schema.propertySignature(Schema.Int).pipe(Schema.fromKey("report_count")),
+	reasons: Schema.Array(ReasonCode),
+	firstReportedAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("first_reported_at")),
+	postedAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("posted_at")),
+});
+export type QueueItem = typeof QueueItem.Type;
+export const Queue = Schema.Struct({ items: Schema.Array(QueueItem) });
+
+export const ModerationActionKind = Schema.Literal("hide", "delete", "freeze", "restore");
+export type ModerationActionKind = typeof ModerationActionKind.Type;
+
+export const ActionPayload = Schema.Struct({
+	postId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("post_id")),
+	action: ModerationActionKind,
+	reasonCode: Schema.propertySignature(ReasonCode).pipe(Schema.fromKey("reason_code")),
+	notes: Schema.optionalWith(Schema.String.pipe(Schema.maxLength(2000)), { exact: true }),
+});
+export const ActionRecorded = Schema.Struct({
+	actionId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("action_id")),
+	postState: Schema.propertySignature(PostState).pipe(Schema.fromKey("post_state")),
+	appealDueAt: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("appeal_due_at")),
+});
+
+export const HistoryEntry = Schema.Struct({
+	actionId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("action_id")),
+	action: ModerationActionKind,
+	reasonCode: Schema.propertySignature(ReasonCode).pipe(Schema.fromKey("reason_code")),
+	level: LevelFromInt,
+	postState: Schema.propertySignature(PostState).pipe(Schema.fromKey("post_state")),
+	appealDueAt: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("appeal_due_at")),
+	overturned: Schema.Boolean,
+	createdAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("created_at")),
+	notes: Schema.optionalWith(Schema.String, { exact: true }),
+	moderator: Schema.optionalWith(Author, { exact: true }),
+});
+export type HistoryEntry = typeof HistoryEntry.Type;
+export const History = Schema.Struct({
+	postId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("post_id")),
+	items: Schema.Array(HistoryEntry),
+});
+
+export const AppealPayload = Schema.Struct({
+	moderationId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("moderation_id")),
+	statement: Schema.String.pipe(Schema.maxLength(4000)),
+});
+export const AppealFiled = Schema.Struct({
+	appealId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("appeal_id")),
+	state: Schema.String,
+	dueAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("due_at")),
+});
+
+export class ModerationGroup extends HttpApiGroup.make("moderation")
+	.add(
+		HttpApiEndpoint.get("roles", "/me/roles")
+			.addSuccess(RoleList)
+			.addError(Unauthorized)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("report", "/reports")
+			.setPayload(ReportPayload)
+			.addSuccess(ReportFiled, { status: 201 })
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.get("queue", "/moderation/queue")
+			.setUrlParams(QueueParams)
+			.addSuccess(Queue)
+			.addError(Unauthorized)
+			.addError(ValidationFailed)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("act", "/moderation/actions")
+			.setPayload(ActionPayload)
+			.addSuccess(ActionRecorded, { status: 201 })
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.get("history", "/posts/:postId/moderation")
+			.setPath(Schema.Struct({ postId: Schema.String }))
+			.addSuccess(History)
+			.addError(Unauthorized)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("appeal", "/appeals")
+			.setPayload(AppealPayload)
+			.addSuccess(AppealFiled, { status: 201 })
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	) {}
+
 // ---- Contract -----------------------------------------------------------------
 
 export class ApiContract extends HttpApi.make("civic")
@@ -492,4 +653,5 @@ export class ApiContract extends HttpApi.make("civic")
 	.add(BoundaryGroup)
 	.add(AuthGroup)
 	.add(PostsGroup)
+	.add(ModerationGroup)
 	.prefix("/api") {}
