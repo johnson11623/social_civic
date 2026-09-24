@@ -431,7 +431,7 @@ func (q *Queries) GetActiveUserByPublicID(ctx context.Context, publicID uuid.UUI
 }
 
 const getChannelByPublicID = `-- name: GetChannelByPublicID :one
-SELECT id, public_id, ward_id, name, description, category, read_only, state, created_at
+SELECT id, public_id, ward_id, creator_id, name, description, category, read_only, state, created_at
 FROM channels
 WHERE public_id = $1
 `
@@ -440,6 +440,7 @@ type GetChannelByPublicIDRow struct {
 	ID          int64
 	PublicID    uuid.UUID
 	WardID      int32
+	CreatorID   pgtype.Int8
 	Name        string
 	Description pgtype.Text
 	Category    int16
@@ -455,6 +456,7 @@ func (q *Queries) GetChannelByPublicID(ctx context.Context, publicID uuid.UUID) 
 		&i.ID,
 		&i.PublicID,
 		&i.WardID,
+		&i.CreatorID,
 		&i.Name,
 		&i.Description,
 		&i.Category,
@@ -579,8 +581,8 @@ func (q *Queries) InsertActor(ctx context.Context, arg InsertActorParams) (int64
 }
 
 const insertChannel = `-- name: InsertChannel :one
-INSERT INTO channels (public_id, ward_id, creator_id, name, description, category)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO channels (public_id, ward_id, creator_id, name, description, category, read_only)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, created_at
 `
 
@@ -591,6 +593,7 @@ type InsertChannelParams struct {
 	Name        string
 	Description pgtype.Text
 	Category    int16
+	ReadOnly    bool
 }
 
 type InsertChannelRow struct {
@@ -606,6 +609,7 @@ func (q *Queries) InsertChannel(ctx context.Context, arg InsertChannelParams) (I
 		arg.Name,
 		arg.Description,
 		arg.Category,
+		arg.ReadOnly,
 	)
 	var i InsertChannelRow
 	err := row.Scan(&i.ID, &i.CreatedAt)
@@ -736,6 +740,85 @@ func (q *Queries) LikedAmong(ctx context.Context, arg LikedAmongParams) ([]int64
 	return items, nil
 }
 
+const listChannelPosts = `-- name: ListChannelPosts :many
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       p.sponsored, p.label_text_en, p.label_text_sw,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.channel_id = $1 AND p.state = 1 AND p.root_id IS NULL
+  AND (p.created_at, p.id) < ($2::timestamptz, $3::bigint)
+ORDER BY p.created_at DESC, p.id DESC
+LIMIT $4
+`
+
+type ListChannelPostsParams struct {
+	ChannelID int64
+	AfterTime time.Time
+	AfterID   int64
+	MaxRows   int32
+}
+
+type ListChannelPostsRow struct {
+	ID                int64
+	PublicID          uuid.UUID
+	Content           pgtype.Text
+	Level             int16
+	WardID            int32
+	Score             float32
+	CreatedAt         time.Time
+	Sponsored         bool
+	LabelTextEn       pgtype.Text
+	LabelTextSw       pgtype.Text
+	AuthorPublicID    uuid.UUID
+	AuthorDisplayName string
+	LikeCount         int32
+	ReplyCount        int32
+}
+
+// W2.1.3 — a channel's top-level posts, newest first, keyset on (created_at, id).
+func (q *Queries) ListChannelPosts(ctx context.Context, arg ListChannelPostsParams) ([]ListChannelPostsRow, error) {
+	rows, err := q.db.Query(ctx, listChannelPosts,
+		arg.ChannelID,
+		arg.AfterTime,
+		arg.AfterID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListChannelPostsRow
+	for rows.Next() {
+		var i ListChannelPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublicID,
+			&i.Content,
+			&i.Level,
+			&i.WardID,
+			&i.Score,
+			&i.CreatedAt,
+			&i.Sponsored,
+			&i.LabelTextEn,
+			&i.LabelTextSw,
+			&i.AuthorPublicID,
+			&i.AuthorDisplayName,
+			&i.LikeCount,
+			&i.ReplyCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listThread = `-- name: ListThread :many
 SELECT p.id, p.public_id, p.content, p.state, p.created_at, p.parent_id,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
@@ -807,7 +890,7 @@ func (q *Queries) ListThread(ctx context.Context, arg ListThreadParams) ([]ListT
 }
 
 const listWardChannels = `-- name: ListWardChannels :many
-SELECT public_id, ward_id, name, description, category, read_only, created_at
+SELECT public_id, ward_id, creator_id, name, description, category, read_only, created_at
 FROM channels
 WHERE ward_id = $1 AND state = 1
 ORDER BY (name = 'general') DESC, name
@@ -816,6 +899,7 @@ ORDER BY (name = 'general') DESC, name
 type ListWardChannelsRow struct {
 	PublicID    uuid.UUID
 	WardID      int32
+	CreatorID   pgtype.Int8
 	Name        string
 	Description pgtype.Text
 	Category    int16
@@ -836,6 +920,7 @@ func (q *Queries) ListWardChannels(ctx context.Context, wardID int32) ([]ListWar
 		if err := rows.Scan(
 			&i.PublicID,
 			&i.WardID,
+			&i.CreatorID,
 			&i.Name,
 			&i.Description,
 			&i.Category,

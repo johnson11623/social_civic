@@ -2,19 +2,19 @@
 SELECT id, public_id, display_name, ward_id, constituency_id, county_id FROM users WHERE public_id = $1 AND state = 1;
 
 -- name: InsertChannel :one
-INSERT INTO channels (public_id, ward_id, creator_id, name, description, category)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO channels (public_id, ward_id, creator_id, name, description, category, read_only)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, created_at;
 
 -- name: ListWardChannels :many
 -- #general first, then by name.
-SELECT public_id, ward_id, name, description, category, read_only, created_at
+SELECT public_id, ward_id, creator_id, name, description, category, read_only, created_at
 FROM channels
 WHERE ward_id = $1 AND state = 1
 ORDER BY (name = 'general') DESC, name;
 
 -- name: GetChannelByPublicID :one
-SELECT id, public_id, ward_id, name, description, category, read_only, state, created_at
+SELECT id, public_id, ward_id, creator_id, name, description, category, read_only, state, created_at
 FROM channels
 WHERE public_id = $1;
 
@@ -159,3 +159,17 @@ LIMIT sqlc.arg(max_rows);
 
 -- name: LikedAmong :many
 SELECT post_id FROM post_likes WHERE user_id = $1 AND post_id = ANY(sqlc.arg(post_ids)::bigint[]);
+
+-- W2.1.3 — a channel's top-level posts, newest first, keyset on (created_at, id).
+-- name: ListChannelPosts :many
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       p.sponsored, p.label_text_en, p.label_text_sw,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.channel_id = sqlc.arg(channel_id) AND p.state = 1 AND p.root_id IS NULL
+  AND (p.created_at, p.id) < (sqlc.arg(after_time)::timestamptz, sqlc.arg(after_id)::bigint)
+ORDER BY p.created_at DESC, p.id DESC
+LIMIT sqlc.arg(max_rows);

@@ -272,8 +272,8 @@ func (h *PostHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, r, http.StatusForbidden, "not_member", i18n.MsgNotMember)
 		return
 	}
-	if channel.ReadOnly {
-		// Moderator roles arrive with EPIC 1.2; until then nobody posts here.
+	if !channel.CanPost(user) {
+		// Announcement channel: only its creator posts until moderator roles (EPIC 1.2).
 		problem.Write(w, r, http.StatusForbidden, "read_only_channel", i18n.MsgReadOnlyChannel)
 		return
 	}

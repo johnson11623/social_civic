@@ -6,8 +6,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -19,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/johnson11623/social_civic/internal/boundary"
 	"github.com/johnson11623/social_civic/internal/platform/authn"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
@@ -79,11 +82,19 @@ type ActiveUser struct {
 type Channel struct {
 	PublicID    uuid.UUID
 	WardID      int32
+	CreatorID   int64 // 0 for platform channels (#general)
 	Name        string
 	Description string
 	Category    int16
 	ReadOnly    bool
 	CreatedAt   time.Time
+}
+
+// CanPost reports whether u may post in c: members of its ward, and in a
+// read-only (announcement) channel only its creator. Moderator roles
+// (EPIC 1.2) will widen this.
+func (c Channel) CanPost(u ActiveUser) bool {
+	return c.WardID == u.WardID && (!c.ReadOnly || (c.CreatorID != 0 && c.CreatorID == u.ID))
 }
 
 // ChannelCreatedData is the payload of channel.created.
@@ -121,6 +132,7 @@ func (s *Store) CreateChannel(ctx context.Context, creator ActiveUser, c Channel
 			Name:        c.Name,
 			Description: pgtype.Text{String: c.Description, Valid: c.Description != ""},
 			Category:    c.Category,
+			ReadOnly:    c.ReadOnly,
 		})
 		if err != nil {
 			return err
@@ -143,8 +155,8 @@ func (s *Store) WardChannels(ctx context.Context, wardID int32) ([]Channel, erro
 	}
 	out := make([]Channel, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, Channel{PublicID: r.PublicID, WardID: r.WardID, Name: r.Name, Description: r.Description.String,
-			Category: r.Category, ReadOnly: r.ReadOnly, CreatedAt: r.CreatedAt})
+		out = append(out, Channel{PublicID: r.PublicID, WardID: r.WardID, CreatorID: r.CreatorID.Int64, Name: r.Name,
+			Description: r.Description.String, Category: r.Category, ReadOnly: r.ReadOnly, CreatedAt: r.CreatedAt})
 	}
 	return out, nil
 }
@@ -158,8 +170,8 @@ func (s *Store) ChannelByPublicID(ctx context.Context, id uuid.UUID) (Channel, e
 	if err != nil {
 		return Channel{}, err
 	}
-	return Channel{PublicID: r.PublicID, WardID: r.WardID, Name: r.Name, Description: r.Description.String,
-		Category: r.Category, ReadOnly: r.ReadOnly, CreatedAt: r.CreatedAt}, nil
+	return Channel{PublicID: r.PublicID, WardID: r.WardID, CreatorID: r.CreatorID.Int64, Name: r.Name,
+		Description: r.Description.String, Category: r.Category, ReadOnly: r.ReadOnly, CreatedAt: r.CreatedAt}, nil
 }
 
 // channelRowID maps a channel's public id to its row id.
@@ -193,11 +205,26 @@ type ChannelJSON struct {
 	State       string    `json:"state"`
 	CreatedAt   time.Time `json:"created_at"`
 	MemberCount *int      `json:"member_count,omitempty"`
+	CanPost     bool      `json:"can_post"` // for the caller
 }
 
-func toJSON(c Channel) ChannelJSON {
+func toJSON(c Channel, caller ActiveUser) ChannelJSON {
 	return ChannelJSON{ChannelID: c.PublicID.String(), WardID: c.WardID, Name: c.Name, Description: c.Description,
-		Category: categoryName(c.Category), ReadOnly: c.ReadOnly, State: "active", CreatedAt: c.CreatedAt}
+		Category: categoryName(c.Category), ReadOnly: c.ReadOnly, State: "active", CreatedAt: c.CreatedAt,
+		CanPost: c.CanPost(caller)}
+}
+
+// WardResolver names a ward and its constituency and county (the boundary tree).
+type WardResolver interface {
+	ResolveWard(code int) (boundary.Scope, error)
+}
+
+// WardJSON names the caller's ward for the channel sidebar header.
+type WardJSON struct {
+	WardID       int32  `json:"ward_id"`
+	Name         string `json:"name"`
+	Constituency string `json:"constituency"`
+	County       string `json:"county"`
 }
 
 // CreateChannelRequest is the body of POST /v1/channels.
@@ -205,6 +232,8 @@ type CreateChannelRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Category    string `json:"category"`
+	// Announcement channel: only its creator posts (W2.1.2.4).
+	ReadOnly bool `json:"read_only"`
 	// Optional; channels are always created in the caller's own ward, and a
 	// different ward is refused (T-2.1.1.3).
 	WardID *int32 `json:"ward_id"`
@@ -214,6 +243,7 @@ type CreateChannelRequest struct {
 // (and identity.RequireConsent for writes).
 type ChannelHandlers struct {
 	Store  *Store
+	Wards  WardResolver // optional: names the ward in the channel list
 	Logger *slog.Logger
 }
 
@@ -287,7 +317,8 @@ func (h *ChannelHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	channel, err := h.Store.CreateChannel(r.Context(), user,
-		Channel{PublicID: uuid.Must(uuid.NewV7()), Name: name, Description: description, Category: category},
+		Channel{PublicID: uuid.Must(uuid.NewV7()), CreatorID: user.ID, Name: name, Description: description,
+			Category: category, ReadOnly: req.ReadOnly},
 		func(c Channel) events.Event {
 			return events.New("post", events.TopicChannelCreated, c.CreatedAt, ChannelCreatedData{
 				ChannelID: c.PublicID.String(), WardID: c.WardID, CreatorID: user.ID, Name: c.Name,
@@ -300,7 +331,7 @@ func (h *ChannelHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		internal(w, r, h.Logger, "create channel", err)
 	default:
-		httpjson.Write(w, http.StatusCreated, toJSON(channel))
+		httpjson.Write(w, http.StatusCreated, toJSON(channel, user))
 	}
 }
 
@@ -317,9 +348,21 @@ func (h *ChannelHandlers) List(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]ChannelJSON, 0, len(channels))
 	for _, c := range channels {
-		items = append(items, toJSON(c))
+		items = append(items, toJSON(c, user))
 	}
-	httpjson.Write(w, http.StatusOK, map[string]any{"ward_id": user.WardID, "items": items})
+	members, err := h.Store.WardMemberCount(r.Context(), user.WardID)
+	if err != nil {
+		internal(w, r, h.Logger, "ward members", err)
+		return
+	}
+	resp := map[string]any{"ward_id": user.WardID, "items": items, "member_count": members}
+	if h.Wards != nil {
+		if scope, err := h.Wards.ResolveWard(int(user.WardID)); err == nil {
+			resp["ward"] = WardJSON{WardID: user.WardID, Name: scope.Ward.DisplayName,
+				Constituency: scope.Constituency.DisplayName, County: scope.County.DisplayName}
+		}
+	}
+	httpjson.Write(w, http.StatusOK, resp)
 }
 
 // Get serves GET /v1/channels/{channel_id}; channels are visible to their ward only.
@@ -351,7 +394,7 @@ func (h *ChannelHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		internal(w, r, h.Logger, "count members", err)
 		return
 	}
-	out := toJSON(channel)
+	out := toJSON(channel, user)
 	out.MemberCount = &members
 	httpjson.Write(w, http.StatusOK, out)
 }
@@ -363,3 +406,97 @@ func KeyByUser(r *http.Request) string {
 }
 
 func pgtypeText(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} }
+
+// ChannelPostsResponse is the body of GET /v1/channels/{channel_id}/posts.
+type ChannelPostsResponse struct {
+	ChannelID  string     `json:"channel_id"`
+	Items      []PostJSON `json:"items"`
+	NextCursor string     `json:"next_cursor,omitempty"`
+	HasMore    bool       `json:"has_more"`
+}
+
+// Posts serves GET /v1/channels/{channel_id}/posts?cursor=&limit= — the
+// channel's top-level posts, newest first, whatever level they have reached
+// (W2.1.3). Channels are visible to their ward only.
+func (h *ChannelHandlers) Posts(w http.ResponseWriter, r *http.Request) {
+	user, ok := caller(w, r, h.Store, h.Logger)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "channel_id"))
+	if err != nil {
+		problem.Write(w, r, http.StatusNotFound, "not_found", i18n.MsgChannelNotFound)
+		return
+	}
+	channel, err := h.Store.ChannelByPublicID(r.Context(), id)
+	if errors.Is(err, ErrNotFound) {
+		problem.Write(w, r, http.StatusNotFound, "not_found", i18n.MsgChannelNotFound)
+		return
+	}
+	if err != nil {
+		internal(w, r, h.Logger, "load channel", err)
+		return
+	}
+	if channel.WardID != user.WardID {
+		problem.Write(w, r, http.StatusForbidden, "not_member", i18n.MsgNotMember)
+		return
+	}
+	limit := 20
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 50 {
+			problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", i18n.MsgValidationFailed,
+				problem.FieldError{Field: "limit", Code: "out_of_range"})
+			return
+		}
+		limit = n
+	}
+	after := threadCursor{T: time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), ID: math.MaxInt64}
+	if v := r.URL.Query().Get("cursor"); v != "" {
+		c, ok := decodeCursor(v)
+		if !ok {
+			problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", i18n.MsgValidationFailed,
+				problem.FieldError{Field: "cursor", Code: "invalid"})
+			return
+		}
+		after = c
+	}
+	rowID, err := h.Store.channelRowID(r.Context(), id)
+	if err != nil {
+		internal(w, r, h.Logger, "channel id", err)
+		return
+	}
+	rows, err := postdb.New(h.Store.pool).ListChannelPosts(r.Context(), postdb.ListChannelPostsParams{
+		ChannelID: rowID, AfterTime: after.T, AfterID: after.ID, MaxRows: int32(limit + 1),
+	})
+	if err != nil {
+		internal(w, r, h.Logger, "channel posts", err)
+		return
+	}
+	resp := ChannelPostsResponse{ChannelID: id.String(), Items: []PostJSON{}}
+	if len(rows) > limit {
+		rows = rows[:limit]
+		last := rows[len(rows)-1]
+		resp.HasMore, resp.NextCursor = true, threadCursor{T: last.CreatedAt, ID: last.ID}.encode()
+	}
+	ids := make([]int64, len(rows))
+	for i, row := range rows {
+		ids[i] = row.ID
+	}
+	liked, err := h.Store.LikedAmong(r.Context(), user.ID, ids)
+	if err != nil {
+		internal(w, r, h.Logger, "channel liked", err)
+		return
+	}
+	for _, row := range rows {
+		l := liked[row.ID]
+		resp.Items = append(resp.Items, postJSON(Post{
+			PublicID: row.PublicID, ChannelID: channel.PublicID, ChannelName: channel.Name,
+			AuthorID: row.AuthorPublicID, AuthorName: row.AuthorDisplayName, Content: row.Content.String,
+			Level: row.Level, WardID: row.WardID, Score: row.Score, State: StateActive, CreatedAt: row.CreatedAt,
+			Likes: int(row.LikeCount), Replies: int(row.ReplyCount), Liked: &l,
+			Sponsored: row.Sponsored, LabelEN: row.LabelTextEn.String, LabelSW: row.LabelTextSw.String,
+		}))
+	}
+	httpjson.Write(w, http.StatusOK, resp)
+}

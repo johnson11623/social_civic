@@ -34,6 +34,8 @@ type Querier interface {
 	InsertPost(ctx context.Context, arg InsertPostParams) (InsertPostRow, error)
 	InsertReply(ctx context.Context, arg InsertReplyParams) (InsertReplyRow, error)
 	LikedAmong(ctx context.Context, arg LikedAmongParams) ([]int64, error)
+	// W2.1.3 — a channel's top-level posts, newest first, keyset on (created_at, id).
+	ListChannelPosts(ctx context.Context, arg ListChannelPostsParams) ([]ListChannelPostsRow, error)
 	// Replies of a thread in conversation order, keyset-paginated.
 	ListThread(ctx context.Context, arg ListThreadParams) ([]ListThreadRow, error)
 	// #general first, then by name.

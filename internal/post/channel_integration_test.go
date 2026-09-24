@@ -83,7 +83,11 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := &ChannelHandlers{Store: NewStore(pool), Logger: logger}
+	tree, err := boundary.LoadTree(context.Background(), pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &ChannelHandlers{Store: NewStore(pool), Wards: tree, Logger: logger}
 	cache := &fakeCache{}
 	ph := &PostHandlers{Store: NewStore(pool), Cache: cache, Logger: logger}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
@@ -91,6 +95,7 @@ func newEnv(t *testing.T) *env {
 	r := chi.NewRouter()
 	r.With(requireAuth).Get("/v1/channels", h.List)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}", h.Get)
+	r.With(requireAuth).Get("/v1/channels/{channel_id}/posts", h.Posts)
 	r.With(requireAuth, requireConsent).Post("/v1/channels", h.Create)
 	r.With(requireAuth, requireConsent).Post("/v1/channels/{channel_id}/posts", ph.Create)
 	r.With(requireAuth).Get("/v1/posts/{post_id}", ph.Get)

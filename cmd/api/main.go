@@ -177,7 +177,7 @@ func run(logger *slog.Logger) error {
 	erasure := &identity.ErasureHandlers{Store: identityStore, Logger: logger, Now: time.Now}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
 	requireConsent := identity.RequireConsent(identityStore, logger)
-	channels := &post.ChannelHandlers{Store: post.NewStore(pool), Logger: logger}
+	channels := &post.ChannelHandlers{Store: post.NewStore(pool), Wards: tree, Logger: logger}
 	// Per-user limit on channel creation (spam), after authentication.
 	perUser := func(name string, n int, window time.Duration) func(http.Handler) http.Handler {
 		return ratelimit.Middleware(limiter, ratelimit.Rule{Name: name, Limit: n, Window: window}, post.KeyByUser, tooManyRequests, logger)
@@ -209,6 +209,7 @@ func run(logger *slog.Logger) error {
 	// require active consent (T-1.1.3.3).
 	r.With(requireAuth).Get("/v1/channels", channels.List)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}", channels.Get)
+	r.With(requireAuth).Get("/v1/channels/{channel_id}/posts", channels.Posts)
 	r.With(requireAuth, requireConsent, channelLimit).Post("/v1/channels", channels.Create)
 	r.With(requireAuth, requireConsent, postMinute, postDay).Post("/v1/channels/{channel_id}/posts", posts.Create)
 	r.With(requireAuth).Get("/v1/feed", feed.Feed)
