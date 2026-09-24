@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
+	"github.com/johnson11623/social_civic/internal/platform/i18n"
 	"github.com/johnson11623/social_civic/internal/platform/problem"
 )
 
@@ -90,12 +91,12 @@ func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	q := strings.TrimSpace(query.Get("q"))
 	if len(normalize(q)) < minQueryLen {
-		problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", "Search needs at least 2 letters or digits.",
+		problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", i18n.MsgSearchTooShort,
 			problem.FieldError{Field: "q", Code: "too_short"})
 		return
 	}
 	if len(q) > 100 {
-		problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", "Search is too long.",
+		problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", i18n.MsgSearchTooLong,
 			problem.FieldError{Field: "q", Code: "too_long"})
 		return
 	}
@@ -103,7 +104,7 @@ func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 	if l := query.Get("level"); l != "" {
 		level, err := ParseLevel(l)
 		if err != nil || level == LevelNational {
-			problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", "level must be county, constituency or ward.",
+			problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", i18n.MsgInvalidLevel,
 				problem.FieldError{Field: "level", Code: "invalid"})
 			return
 		}
@@ -112,7 +113,7 @@ func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 	if l := query.Get("limit"); l != "" {
 		n, err := strconv.Atoi(l)
 		if err != nil || n < 1 || n > MaxSearchLimit {
-			problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", "limit must be between 1 and 50.",
+			problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", i18n.MsgInvalidLimit,
 				problem.FieldError{Field: "limit", Code: "out_of_range"})
 			return
 		}

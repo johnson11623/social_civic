@@ -1,0 +1,26 @@
+{
+  "status.400": "Bad request",
+  "status.401": "Unauthorized",
+  "status.403": "Forbidden",
+  "status.404": "Not found",
+  "status.409": "Conflict",
+  "status.422": "Unprocessable entity",
+  "status.429": "Too many requests",
+  "status.500": "Internal server error",
+  "status.503": "Service unavailable",
+
+  "error.malformed_json": "The request body must be a single JSON object with known fields only.",
+  "error.validation_failed": "One or more fields are invalid.",
+  "error.internal": "Something went wrong. Please try again.",
+
+  "identity.invalid_id": "National ID must be 8 digits.",
+  "identity.consent_required": "You must give explicit consent to register.",
+  "identity.unknown_ward": "The ward you selected is not recognised.",
+  "identity.id_already_registered": "This national ID is already registered.",
+  "identity.registration_unavailable": "Registration is temporarily unavailable. Please try again later.",
+
+  "boundary.search_too_short": "Type at least 2 letters or digits to search.",
+  "boundary.search_too_long": "The search text is too long.",
+  "boundary.invalid_level": "Level must be county, constituency or ward.",
+  "boundary.invalid_limit": "Limit must be between 1 and 50."
+}

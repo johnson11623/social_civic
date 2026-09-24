@@ -14,6 +14,7 @@ import (
 
 	"github.com/johnson11623/social_civic/internal/boundary"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
+	"github.com/johnson11623/social_civic/internal/platform/i18n"
 	"github.com/johnson11623/social_civic/internal/platform/problem"
 	"github.com/johnson11623/social_civic/pkg/events"
 	"github.com/johnson11623/social_civic/pkg/kms"
@@ -86,28 +87,28 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var req RegisterRequest
 	if err := httpjson.DecodeStrict(w, r, &req); err != nil {
-		problem.Write(w, r, http.StatusBadRequest, "malformed_json", "Request body must be a single JSON object with known fields.")
+		problem.Write(w, r, http.StatusBadRequest, "malformed_json", i18n.MsgMalformedJSON)
 		return
 	}
 
 	// Validate everything before touching the keyring or database, so a
 	// rejected request leaves no trace of the national ID.
 	if err := ValidateNationalID(req.NationalID); err != nil {
-		problem.Write(w, r, http.StatusBadRequest, "invalid_id", "National ID must be 8 digits.")
+		problem.Write(w, r, http.StatusBadRequest, "invalid_id", i18n.MsgInvalidNationalID)
 		return
 	}
 	if fieldErrs := validateRegister(&req); len(fieldErrs) > 0 {
-		problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", "One or more fields are invalid.", fieldErrs...)
+		problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", i18n.MsgValidationFailed, fieldErrs...)
 		return
 	}
 	if !req.ConsentGranted {
-		problem.Write(w, r, http.StatusUnprocessableEntity, "consent_required", "Explicit consent is required to register.")
+		problem.Write(w, r, http.StatusUnprocessableEntity, "consent_required", i18n.MsgConsentRequired)
 		return
 	}
 
 	scope, err := h.Boundary.ResolveWard(req.WardID)
 	if errors.Is(err, boundary.ErrUnknownWard) {
-		problem.Write(w, r, http.StatusUnprocessableEntity, "invalid_unit", "Ward is not a known administrative unit.",
+		problem.Write(w, r, http.StatusUnprocessableEntity, "invalid_unit", i18n.MsgUnknownWard,
 			problem.FieldError{Field: "ward_id", Code: "unknown_ward"})
 		return
 	}
@@ -119,7 +120,7 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	pepper, err := h.Keyring.Current(ctx, PepperKeyName)
 	if err != nil {
 		h.Logger.ErrorContext(ctx, "keyring unavailable", "err", err)
-		problem.Write(w, r, http.StatusServiceUnavailable, "kms_unavailable", "Registration is temporarily unavailable.")
+		problem.Write(w, r, http.StatusServiceUnavailable, "kms_unavailable", i18n.MsgRegistrationUnavailable)
 		return
 	}
 
@@ -151,7 +152,7 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		IPHash:         hashIP(clientIP(r), pepper.Material),
 	}, userRegistered)
 	if errors.Is(err, ErrDuplicateNationalID) {
-		problem.Write(w, r, http.StatusConflict, "id_already_registered", "This national ID is already registered.")
+		problem.Write(w, r, http.StatusConflict, "id_already_registered", i18n.MsgIDAlreadyRegistered)
 		return
 	}
 	if err != nil {
@@ -185,7 +186,7 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *RegisterHandler) fail(ctx context.Context, w http.ResponseWriter, r *http.Request, op string, err error) {
 	h.Logger.ErrorContext(ctx, "register failed", "op", op, "err", err)
-	problem.Write(w, r, http.StatusInternalServerError, "internal_error", "Something went wrong. Please try again.")
+	problem.Write(w, r, http.StatusInternalServerError, "internal_error", i18n.MsgInternal)
 }
 
 // validateRegister normalizes req in place and returns field errors.

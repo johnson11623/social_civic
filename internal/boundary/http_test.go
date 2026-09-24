@@ -110,3 +110,23 @@ func TestSearchEndpointValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchEndpointLocalizedErrors(t *testing.T) {
+	h := NewHandlers(tree(t))
+	for lang, want := range map[string]string{
+		"sw": "Andika angalau herufi au tarakimu 2 ili kutafuta.",
+		"en": "Type at least 2 letters or digits to search.",
+	} {
+		rec := get(t, h.Search, "/v1/boundary/search?q=a", "Accept-Language", lang)
+		var p struct {
+			Code   string `json:"code"`
+			Detail string `json:"detail"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&p); err != nil {
+			t.Fatal(err)
+		}
+		if p.Code != "validation_failed" || p.Detail != want {
+			t.Errorf("%s: code=%q detail=%q", lang, p.Code, p.Detail)
+		}
+	}
+}

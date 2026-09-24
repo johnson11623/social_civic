@@ -1,0 +1,26 @@
+{
+  "status.400": "Ombi batili",
+  "status.401": "Hujathibitishwa",
+  "status.403": "Hairuhusiwi",
+  "status.404": "Haikupatikana",
+  "status.409": "Mgongano",
+  "status.422": "Data haikubaliki",
+  "status.429": "Maombi mengi mno",
+  "status.500": "Hitilafu ya seva",
+  "status.503": "Huduma haipatikani",
+
+  "error.malformed_json": "Ombi lazima liwe kitu kimoja cha JSON chenye sehemu zinazojulikana pekee.",
+  "error.validation_failed": "Sehemu moja au zaidi si sahihi.",
+  "error.internal": "Hitilafu imetokea. Tafadhali jaribu tena.",
+
+  "identity.invalid_id": "Nambari ya kitambulisho cha taifa lazima iwe na tarakimu 8.",
+  "identity.consent_required": "Lazima utoe idhini yako waziwazi ili kujisajili.",
+  "identity.unknown_ward": "Wadi uliyochagua haitambuliki.",
+  "identity.id_already_registered": "Nambari hii ya kitambulisho cha taifa tayari imesajiliwa.",
+  "identity.registration_unavailable": "Usajili haupatikani kwa sasa. Tafadhali jaribu tena baadaye.",
+
+  "boundary.search_too_short": "Andika angalau herufi au tarakimu 2 ili kutafuta.",
+  "boundary.search_too_long": "Maneno ya utafutaji ni marefu mno.",
+  "boundary.invalid_level": "Ngazi lazima iwe kaunti, eneo bunge au wadi.",
+  "boundary.invalid_limit": "Kikomo lazima kiwe kati ya 1 na 50."
+}

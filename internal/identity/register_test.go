@@ -352,3 +352,84 @@ func TestNewTokenIssuer_RejectsShortKey(t *testing.T) {
 		t.Error("expected error for short signing key")
 	}
 }
+
+// T-1.1.1.9: error detail follows Accept-Language (default Kiswahili); the
+// code stays English so clients can rely on it.
+func TestRegister_LocalizedErrors(t *testing.T) {
+	tests := []struct {
+		acceptLanguage string
+		wantLang       string
+		wantDetail     string
+		wantTitle      string
+	}{
+		{"sw", "sw", "Nambari ya kitambulisho cha taifa lazima iwe na tarakimu 8.", "Ombi batili"},
+		{"sw-KE", "sw", "Nambari ya kitambulisho cha taifa lazima iwe na tarakimu 8.", "Ombi batili"},
+		{"en-GB,en;q=0.9", "en", "National ID must be 8 digits.", "Bad request"},
+		{"", "sw", "Nambari ya kitambulisho cha taifa lazima iwe na tarakimu 8.", "Ombi batili"},
+		{"fr", "sw", "Nambari ya kitambulisho cha taifa lazima iwe na tarakimu 8.", "Ombi batili"},
+	}
+	for _, tt := range tests {
+		t.Run("Accept-Language="+tt.acceptLanguage, func(t *testing.T) {
+			f := newFixture(t)
+			body := validBody()
+			body["national_id"] = "123"
+			raw, _ := json.Marshal(body)
+			req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(raw))
+			if tt.acceptLanguage != "" {
+				req.Header.Set("Accept-Language", tt.acceptLanguage)
+			}
+			rec := httptest.NewRecorder()
+			f.handler.ServeHTTP(rec, req)
+
+			if got := rec.Header().Get("Content-Language"); got != tt.wantLang {
+				t.Errorf("Content-Language = %q, want %q", got, tt.wantLang)
+			}
+			if !strings.Contains(rec.Header().Get("Vary"), "Accept-Language") {
+				t.Error("missing Vary: Accept-Language")
+			}
+			p := decodeProblem(t, rec)
+			if p.Code != "invalid_id" {
+				t.Errorf("code = %q, want invalid_id (never translated)", p.Code)
+			}
+			if string(p.Lang) != tt.wantLang || p.Detail != tt.wantDetail || p.Title != tt.wantTitle {
+				t.Errorf("lang=%q title=%q detail=%q", p.Lang, p.Title, p.Detail)
+			}
+		})
+	}
+}
+
+func TestRegister_EveryErrorIsLocalized(t *testing.T) {
+	// Each rejection path must produce different sw and en detail text.
+	cases := map[string]func(*fixture, map[string]any){
+		"invalid_id":            func(_ *fixture, b map[string]any) { b["national_id"] = "1" },
+		"validation_failed":     func(_ *fixture, b map[string]any) { b["display_name"] = "" },
+		"consent_required":      func(_ *fixture, b map[string]any) { b["consent_granted"] = false },
+		"invalid_unit":          func(_ *fixture, b map[string]any) { b["ward_id"] = 1451 },
+		"id_already_registered": func(f *fixture, _ map[string]any) { f.store.err = ErrDuplicateNationalID },
+		"kms_unavailable":       func(f *fixture, _ map[string]any) { f.handler.Keyring = failingKeyring{} },
+		"internal_error":        func(f *fixture, _ map[string]any) { f.store.err = errors.New("db down") },
+	}
+	for code, mutate := range cases {
+		t.Run(code, func(t *testing.T) {
+			details := map[string]string{}
+			for _, lang := range []string{"sw", "en"} {
+				f := newFixture(t)
+				body := validBody()
+				mutate(f, body)
+				raw, _ := json.Marshal(body)
+				req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(raw))
+				req.Header.Set("Accept-Language", lang)
+				rec := httptest.NewRecorder()
+				f.handler.ServeHTTP(rec, req)
+				p := decodeProblem(t, rec)
+				if p.Code != code {
+					t.Fatalf("code = %q, want %q", p.Code, code)
+				}
+				details[lang] = p.Detail
+			}
+			if details["sw"] == "" || details["sw"] == details["en"] {
+				t.Errorf("detail not localized: sw=%q en=%q", details["sw"], details["en"])
+			}
+		})
+	}
+}

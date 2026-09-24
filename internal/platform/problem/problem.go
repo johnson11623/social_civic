@@ -6,11 +6,14 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/johnson11623/social_civic/internal/platform/i18n"
 )
 
 const typeBase = "https://api.civicplatform.ke/errors/"
 
-// FieldError describes a single invalid request field.
+// FieldError describes a single invalid request field. Codes are stable
+// English identifiers, never translated.
 type FieldError struct {
 	Field string `json:"field"`
 	Code  string `json:"code"`
@@ -24,24 +27,31 @@ type Problem struct {
 	Code      string       `json:"code"`
 	Detail    string       `json:"detail,omitempty"`
 	Instance  string       `json:"instance,omitempty"`
+	Lang      i18n.Lang    `json:"lang"`
 	RequestID string       `json:"request_id,omitempty"`
 	Errors    []FieldError `json:"errors,omitempty"`
 }
 
 // Write sends a problem response. code is the stable English domain code;
-// detail is human-readable (localized in T-1.1.1.9).
-func Write(w http.ResponseWriter, r *http.Request, status int, code, detail string, errs ...FieldError) {
+// title and detail are localized from the request's Accept-Language
+// (default Kiswahili).
+func Write(w http.ResponseWriter, r *http.Request, status int, code string, msg i18n.Key, errs ...FieldError) {
+	lang := i18n.FromRequest(r)
 	p := Problem{
 		Type:      typeBase + code,
-		Title:     http.StatusText(status),
+		Title:     i18n.StatusTitle(lang, status),
 		Status:    status,
 		Code:      code,
-		Detail:    detail,
+		Detail:    i18n.T(lang, msg),
 		Instance:  r.URL.Path,
+		Lang:      lang,
 		RequestID: middleware.GetReqID(r.Context()),
 		Errors:    errs,
 	}
-	w.Header().Set("Content-Type", "application/problem+json")
+	h := w.Header()
+	h.Set("Content-Type", "application/problem+json")
+	h.Set("Content-Language", string(lang))
+	h.Add("Vary", "Accept-Language")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(p)
 }
