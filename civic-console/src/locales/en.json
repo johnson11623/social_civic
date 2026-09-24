@@ -1,18 +1,21 @@
 {
 	"app.name": "Civic Platform",
 	"app.tagline": "Ward · Constituency · County · National",
-
 	"language.label": "Language",
 	"language.en": "English",
 	"language.sw": "Kiswahili",
 	"language.changed": "Language changed to English",
-
 	"platform.status": "Platform API: {status}",
 	"platform.ok": "ok",
 	"platform.unavailable": "unavailable",
-
 	"notFound.eyebrow": "404",
 	"notFound.title": "Page not found",
 	"notFound.body": "This link doesn't exist or has moved.",
-	"notFound.home": "Go home"
+	"notFound.home": "Go home",
+	"common.loading": "Loading",
+	"level.label": "Level: {level}",
+	"level.ward": "Ward",
+	"level.constituency": "Constituency",
+	"level.county": "County",
+	"level.national": "National"
 }

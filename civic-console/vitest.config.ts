@@ -19,6 +19,8 @@ export default defineConfig({
 			provider: "v8",
 			include: ["src/**/*.{ts,tsx}"],
 			exclude: ["src/routeTree.gen.ts", "src/**/*.test.{ts,tsx}"],
+			// T-W1.2.2.7 — atoms must stay ≥ 90% covered.
+			thresholds: { "src/components/ui/**": { statements: 90, branches: 90, functions: 90, lines: 90 } },
 		},
 	},
 });

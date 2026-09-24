@@ -1,18 +1,21 @@
 {
 	"app.name": "Jukwaa la Kiraia",
 	"app.tagline": "Wadi · Eneo Bunge · Kaunti · Taifa",
-
 	"language.label": "Lugha",
 	"language.en": "English",
 	"language.sw": "Kiswahili",
 	"language.changed": "Lugha imebadilishwa kuwa Kiswahili",
-
 	"platform.status": "API ya jukwaa: {status}",
 	"platform.ok": "inafanya kazi",
 	"platform.unavailable": "haipatikani",
-
 	"notFound.eyebrow": "404",
 	"notFound.title": "Ukurasa haukupatikana",
 	"notFound.body": "Kiungo hiki hakipo au kimehamishwa.",
-	"notFound.home": "Rudi mwanzo"
+	"notFound.home": "Rudi mwanzo",
+	"common.loading": "Inapakia",
+	"level.label": "Ngazi: {level}",
+	"level.ward": "Wadi",
+	"level.constituency": "Eneo Bunge",
+	"level.county": "Kaunti",
+	"level.national": "Taifa"
 }
