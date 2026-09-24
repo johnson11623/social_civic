@@ -65,6 +65,17 @@ type Post struct {
 	Sponsored    bool
 	LabelEN      string
 	LabelSW      string
+
+	AuthorRowID int64 // internal: authorship checks (appeals), events
+	Moderation  *Moderation
+}
+
+// Moderation is the decision behind a frozen or removed post.
+type Moderation struct {
+	ActionID    string     `json:"action_id"`
+	Action      string     `json:"action"`
+	ReasonCode  string     `json:"reason_code"`
+	AppealDueAt *time.Time `json:"appeal_due_at,omitempty"`
 }
 
 // PostCreatedData is the payload of post.created. Content is left out: events
@@ -135,6 +146,11 @@ func (s *Store) PostByPublicID(ctx context.Context, id uuid.UUID) (Post, error) 
 		ChannelRowID: r.ChannelID, RootID: r.RootID.Int64, ParentID: r.ParentID.Int64,
 		Likes: int(r.LikeCount), Replies: int(r.ReplyCount),
 		Sponsored: r.Sponsored, LabelEN: r.LabelTextEn.String, LabelSW: r.LabelTextSw.String,
+		AuthorRowID: r.AuthorID,
+	}
+	if r.ModerationActionID != "" {
+		p.Moderation = &Moderation{ActionID: r.ModerationActionID, Action: r.ModerationAction,
+			ReasonCode: r.ModerationReason, AppealDueAt: r.ModerationAppealDueAt}
 	}
 	q := postdb.New(s.pool)
 	if p.RootID != 0 {
@@ -165,9 +181,11 @@ type PostJSON struct {
 	Liked     *bool      `json:"liked,omitempty"`
 	Sponsored bool       `json:"sponsored"`
 	Label     *Label     `json:"sponsored_label,omitempty"` // both languages, always shown together
-	RootID    string     `json:"root_id,omitempty"`         // replies: the thread's top-level post
-	ParentID  string     `json:"parent_id,omitempty"`       // replies: the post or reply answered
-	CreatedAt time.Time  `json:"created_at"`
+	// Frozen or removed: the decision, its harm and the appeal deadline.
+	Moderation *Moderation `json:"moderation,omitempty"`
+	RootID     string      `json:"root_id,omitempty"`   // replies: the thread's top-level post
+	ParentID   string      `json:"parent_id,omitempty"` // replies: the post or reply answered
+	CreatedAt  time.Time   `json:"created_at"`
 }
 
 // Label is a sponsored post's immutable bilingual disclosure (F-07).
@@ -202,6 +220,7 @@ func postJSON(p Post) PostJSON {
 	if p.Sponsored {
 		out.Sponsored, out.Label = true, &Label{EN: p.LabelEN, SW: p.LabelSW}
 	}
+	out.Moderation = p.Moderation
 	if p.State == StateActive || p.State == StateFrozen {
 		content := p.Content
 		out.Content = &content

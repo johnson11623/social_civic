@@ -25,6 +25,7 @@ type Querier interface {
 	FeedWard(ctx context.Context, arg FeedWardParams) ([]FeedWardRow, error)
 	GetActiveUserByPublicID(ctx context.Context, publicID uuid.UUID) (GetActiveUserByPublicIDRow, error)
 	GetChannelByPublicID(ctx context.Context, publicID uuid.UUID) (GetChannelByPublicIDRow, error)
+	// The decision behind a frozen or removed post (W1.4.3.5: reason + appeal).
 	GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (GetPostByPublicIDRow, error)
 	GetPostPublicIDByID(ctx context.Context, id int64) (uuid.UUID, error)
 	HasLiked(ctx context.Context, arg HasLikedParams) (bool, error)

@@ -10,4 +10,7 @@ import (
 // consent guard and rate limits are covered elsewhere).
 func registerRoutes(r chi.Router, auth func(http.Handler) http.Handler, h *Handlers) {
 	r.With(auth).Post("/v1/reports", h.Report)
+	r.With(auth).Post("/v1/moderation/actions", h.Act)
+	r.With(auth).Get("/v1/moderation/queue", h.Queue)
+	r.With(auth).Get("/v1/posts/{post_id}/moderation", h.History)
 }

@@ -473,39 +473,56 @@ SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.constituency_id, p.co
        p.sponsored, p.label_text_en, p.label_text_sw,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       p.author_id,
+       COALESCE(ma.public_id::text, '')::text AS moderation_action_id, COALESCE(ma.action, '')::text AS moderation_action,
+       COALESCE(ma.reason_code, '')::text AS moderation_reason,
+       ma.appeal_due_at AS moderation_appeal_due_at
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN LATERAL (
+    SELECT public_id, action, reason_code, appeal_due_at
+    FROM moderation_actions
+    WHERE post_id = p.id AND p.state IN (2, 3) AND action <> 'restore'
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+) ma ON TRUE
 WHERE p.public_id = $1
 `
 
 type GetPostByPublicIDRow struct {
-	ID                int64
-	PublicID          uuid.UUID
-	Content           pgtype.Text
-	Level             int16
-	WardID            int32
-	ConstituencyID    int32
-	CountyID          int32
-	Score             float32
-	State             int16
-	CreatedAt         time.Time
-	ChannelID         int64
-	RootID            pgtype.Int8
-	ParentID          pgtype.Int8
-	Sponsored         bool
-	LabelTextEn       pgtype.Text
-	LabelTextSw       pgtype.Text
-	ChannelPublicID   uuid.UUID
-	ChannelName       string
-	AuthorPublicID    uuid.UUID
-	AuthorDisplayName string
-	LikeCount         int32
-	ReplyCount        int32
+	ID                    int64
+	PublicID              uuid.UUID
+	Content               pgtype.Text
+	Level                 int16
+	WardID                int32
+	ConstituencyID        int32
+	CountyID              int32
+	Score                 float32
+	State                 int16
+	CreatedAt             time.Time
+	ChannelID             int64
+	RootID                pgtype.Int8
+	ParentID              pgtype.Int8
+	Sponsored             bool
+	LabelTextEn           pgtype.Text
+	LabelTextSw           pgtype.Text
+	ChannelPublicID       uuid.UUID
+	ChannelName           string
+	AuthorPublicID        uuid.UUID
+	AuthorDisplayName     string
+	LikeCount             int32
+	ReplyCount            int32
+	AuthorID              int64
+	ModerationActionID    string
+	ModerationAction      string
+	ModerationReason      string
+	ModerationAppealDueAt *time.Time
 }
 
+// The decision behind a frozen or removed post (W1.4.3.5: reason + appeal).
 func (q *Queries) GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (GetPostByPublicIDRow, error) {
 	row := q.db.QueryRow(ctx, getPostByPublicID, publicID)
 	var i GetPostByPublicIDRow
@@ -532,6 +549,11 @@ func (q *Queries) GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (Ge
 		&i.AuthorDisplayName,
 		&i.LikeCount,
 		&i.ReplyCount,
+		&i.AuthorID,
+		&i.ModerationActionID,
+		&i.ModerationAction,
+		&i.ModerationReason,
+		&i.ModerationAppealDueAt,
 	)
 	return i, err
 }
