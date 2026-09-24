@@ -1,6 +1,9 @@
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense } from "react";
 
+import { I18nProvider } from "@/lib/i18n/I18nProvider";
+import { translate } from "@/lib/i18n/messages";
+import { resolveLang } from "@/lib/i18n/resolve-lang";
 import appCss from "@/styles/global.css?url";
 
 // Devtools are dev-only: the lazy import keeps them out of the production
@@ -8,12 +11,14 @@ import appCss from "@/styles/global.css?url";
 const Devtools = import.meta.env.DEV ? lazy(() => import("@/components/dev/Devtools")) : () => null;
 
 export const Route = createRootRoute({
-	head: () => ({
+	// Language for this render: cookie → Accept-Language → Kiswahili.
+	beforeLoad: () => ({ lang: resolveLang() }),
+	head: ({ match }) => ({
 		meta: [
 			{ charSet: "utf-8" },
 			{ name: "viewport", content: "width=device-width, initial-scale=1" },
 			{ name: "color-scheme", content: "light dark" },
-			{ title: "Civic Platform" },
+			{ title: translate(match.context.lang, "app.name") },
 		],
 		links: [
 			{ rel: "stylesheet", href: appCss },
@@ -24,16 +29,17 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: ReactNode }) {
+	const { lang } = Route.useRouteContext();
 	return (
 		// suppressHydrationWarning: browser extensions (e.g. Grammarly) add
 		// attributes to <html>/<body> before React hydrates. It only silences
 		// attribute mismatches on these two elements, never their children.
-		<html lang="en" suppressHydrationWarning>
+		<html lang={lang} suppressHydrationWarning>
 			<head>
 				<HeadContent />
 			</head>
 			<body className="bg-paper text-ink" suppressHydrationWarning>
-				{children}
+				<I18nProvider initialLang={lang}>{children}</I18nProvider>
 				<Suspense>
 					<Devtools />
 				</Suspense>

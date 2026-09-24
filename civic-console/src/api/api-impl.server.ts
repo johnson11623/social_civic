@@ -15,13 +15,18 @@ import {
 	UpstreamError,
 	type ValidationFailed,
 } from "@/api/api-contract";
+import { isLang, LANG_COOKIE } from "@/lib/i18n/lang";
 import { Backend } from "@/services/backend.server";
 
-/** The caller's Accept-Language (browser request or SSR-forwarded headers). */
-const acceptLanguage = Effect.map(
-	HttpServerRequest.HttpServerRequest,
-	(req) => req.headers["accept-language"],
-);
+/**
+ * Language to request from the Go API: the user's explicit choice (`lang`
+ * cookie) wins over the browser's Accept-Language (T-W1.1.3.4). Works for
+ * browser requests and SSR-forwarded headers alike.
+ */
+const acceptLanguage = Effect.map(HttpServerRequest.HttpServerRequest, (req) => {
+	const chosen = req.cookies[LANG_COOKIE];
+	return isLang(chosen) ? chosen : req.headers["accept-language"];
+});
 
 /** For endpoints that take no input, a 422 from the platform is an upstream fault. */
 const asUpstream = (e: ValidationFailed) =>

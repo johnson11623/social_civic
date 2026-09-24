@@ -95,6 +95,16 @@ describe("BFF /api/boundary/search", () => {
 		expect(call?.headers["accept-language"]).toBe("sw-KE");
 	});
 
+	it("prefers the user's `lang` cookie over the browser's Accept-Language (T-W1.1.3.4)", async () => {
+		const go = fakeGo(() => ({ status: 200, body: { query: "ka", items: [] } }));
+		await bff(go)(
+			new Request("http://web.test/api/boundary/search?q=ka", {
+				headers: { "accept-language": "en-US,en;q=0.9", cookie: "theme=dark; lang=sw" },
+			}),
+		);
+		expect(go.seen[0]?.headers["accept-language"]).toBe("sw");
+	});
+
 	it("maps Go 422 problems to ValidationFailed with localized detail", async () => {
 		const go = fakeGo(() => ({
 			status: 422,
