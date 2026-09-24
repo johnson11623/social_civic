@@ -94,3 +94,22 @@ SELECT EXISTS (
     JOIN users u ON u.id = c.user_id
     WHERE u.public_id = $1 AND c.version = $2 AND c.withdrawn_at IS NULL AND u.state = 1
 ) AS active;
+
+-- name: GetMFA :one
+SELECT user_id, secret_enc, key_version, enabled_at, last_step FROM user_mfa WHERE user_id = $1;
+
+-- name: StartMFAEnrolment :execrows
+-- A new pending secret replaces an unfinished enrolment, never an enabled one.
+INSERT INTO user_mfa (user_id, secret_enc, key_version) VALUES ($1, $2, $3)
+ON CONFLICT (user_id) DO UPDATE SET secret_enc = EXCLUDED.secret_enc, key_version = EXCLUDED.key_version,
+    last_step = 0, created_at = now()
+WHERE user_mfa.enabled_at IS NULL;
+
+-- name: AcceptMFAStep :execrows
+-- Records a used code; enables MFA on first use. Refuses stale steps, so
+-- two concurrent uses of one code can't both pass.
+UPDATE user_mfa SET last_step = sqlc.arg(step), enabled_at = COALESCE(enabled_at, now())
+WHERE user_id = sqlc.arg(user_id) AND last_step < sqlc.arg(step);
+
+-- name: DeleteMFA :exec
+DELETE FROM user_mfa WHERE user_id = $1;

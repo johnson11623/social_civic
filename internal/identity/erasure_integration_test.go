@@ -115,6 +115,7 @@ func TestErasureIntegration_RequestAndComplete(t *testing.T) {
 	for q, want := range map[string]int{
 		"SELECT count(*) FROM verification_attempts":                       0,
 		"SELECT count(*) FROM otp_challenges":                              0,
+		"SELECT count(*) FROM user_mfa":                                    0,
 		"SELECT count(*) FROM consents WHERE ip_hash IS NOT NULL":          0,
 		"SELECT count(*) FROM consents":                                    1, // lawful-basis evidence kept
 		"SELECT count(*) FROM erasure_requests WHERE state = 2":            1,

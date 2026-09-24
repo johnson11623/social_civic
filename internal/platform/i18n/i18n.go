@@ -55,6 +55,10 @@ const (
 	MsgTokenReuseDetected      Key = "identity.token_reuse_detected"
 	MsgConsentNotFound         Key = "identity.consent_not_found"
 	MsgConsentWithdrawn        Key = "identity.consent_withdrawn"
+	MsgMFARequired             Key = "identity.mfa_required"
+	MsgMFAAlreadyEnabled       Key = "identity.mfa_already_enabled"
+	MsgMFANotEnrolled          Key = "identity.mfa_not_enrolled"
+	MsgMFAInvalidCode          Key = "identity.mfa_invalid_code"
 	MsgErasureInProgress       Key = "identity.erasure_in_progress"
 
 	// SMSLoginCode takes the code (%s) and its lifetime in minutes (%d).

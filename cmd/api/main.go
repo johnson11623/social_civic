@@ -179,6 +179,7 @@ func run(logger *slog.Logger) error {
 	erasure := &identity.ErasureHandlers{Store: identityStore, Logger: logger, Now: time.Now}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
 	requireConsent := identity.RequireConsent(identityStore, logger)
+	mfa := &identity.MFAHandlers{Pool: pool, Keyring: keyring, Tokens: tokens, Logger: logger, Now: time.Now}
 	roles := &membership.Handlers{Store: membership.NewStore(pool), Logger: logger, Now: time.Now}
 	channels := &post.ChannelHandlers{Store: post.NewStore(pool), Wards: tree, Logger: logger}
 	// Per-user limit on channel creation (spam), after authentication.
@@ -211,17 +212,25 @@ func run(logger *slog.Logger) error {
 
 	// Channel & Post (EPIC 2.1). Writes process personal data, so they also
 	// require active consent (T-1.1.3.3).
+	// F-08 — TOTP enrolment and step-up; 5 codes per 15 minutes per user.
+	mfaLimit := perUser("mfa", 5, 15*time.Minute)
+	requireMFA := authn.RequireMFA(identity.MFARequired)
+	r.With(requireAuth).Get("/v1/users/me/mfa", mfa.Status)
+	r.With(requireAuth, mfaLimit).Post("/v1/users/me/mfa/totp", mfa.Enrol)
+	r.With(requireAuth, mfaLimit).Post("/v1/users/me/mfa/totp/verify", mfa.Activate)
+	r.With(requireAuth, mfaLimit).Post("/v1/auth/mfa", mfa.StepUp)
+
 	r.With(requireAuth).Get("/v1/users/me/roles", roles.MyRoles)
-	r.With(requireAuth).Post("/v1/moderators", roles.Appoint)
+	r.With(requireAuth, requireMFA).Post("/v1/moderators", roles.Appoint)
 	// LLD §8 — 10 reports an hour per user.
 	r.With(requireAuth, requireConsent, perUser("report", 10, time.Hour)).Post("/v1/reports", mod.Report)
 	// API spec §1.6 — 100 moderation actions an hour per moderator.
-	r.With(requireAuth, perUser("moderation", 100, time.Hour)).Post("/v1/moderation/actions", mod.Act)
+	r.With(requireAuth, requireMFA, perUser("moderation", 100, time.Hour)).Post("/v1/moderation/actions", mod.Act)
 	r.With(requireAuth).Get("/v1/moderation/queue", mod.Queue)
 	r.With(requireAuth).Get("/v1/posts/{post_id}/moderation", mod.History)
 	r.With(requireAuth, requireConsent, perUser("appeal", 5, 24*time.Hour)).Post("/v1/appeals", mod.File) // LLD §8: 5 a day
 	r.With(requireAuth).Get("/v1/appeals", mod.Open)
-	r.With(requireAuth).Post("/v1/appeals/{appeal_id}/decision", mod.Decide)
+	r.With(requireAuth, requireMFA).Post("/v1/appeals/{appeal_id}/decision", mod.Decide)
 	r.With(requireAuth).Get("/v1/channels", channels.List)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}", channels.Get)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}/posts", channels.Posts)

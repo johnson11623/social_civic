@@ -40,6 +40,9 @@ type Claims struct {
 	jwt.RegisteredClaims
 	Type  string      `json:"typ"`             // "access" or "refresh"
 	Scope *ScopeClaim `json:"scope,omitempty"` // access tokens only
+	// MFA marks an access token issued after a TOTP step-up (F-08). It is
+	// never set on refresh tokens, so step-up lapses with the access token.
+	MFA bool `json:"mfa,omitempty"`
 }
 
 // TokenPair is returned to clients on registration, login and refresh.
@@ -92,7 +95,19 @@ func (t *TokenIssuer) Issue(subject string, scope ScopeClaim) (TokenPair, error)
 	}, nil
 }
 
+// IssueMFAAccess signs a stepped-up access token (no refresh token: the
+// session's refresh token is unchanged and yields ordinary tokens).
+func (t *TokenIssuer) IssueMFAAccess(subject string, scope ScopeClaim) (string, int, error) {
+	now := t.now().Truncate(time.Second)
+	token, _, err := t.signClaims(subject, TokenTypeAccess, now, AccessTokenTTL, &scope, true)
+	return token, int(AccessTokenTTL.Seconds()), err
+}
+
 func (t *TokenIssuer) sign(subject, typ string, now time.Time, ttl time.Duration, scope *ScopeClaim) (string, uuid.UUID, error) {
+	return t.signClaims(subject, typ, now, ttl, scope, false)
+}
+
+func (t *TokenIssuer) signClaims(subject, typ string, now time.Time, ttl time.Duration, scope *ScopeClaim, mfa bool) (string, uuid.UUID, error) {
 	jti := uuid.Must(uuid.NewV7())
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -106,6 +121,7 @@ func (t *TokenIssuer) sign(subject, typ string, now time.Time, ttl time.Duration
 		},
 		Type:  typ,
 		Scope: scope,
+		MFA:   mfa,
 	}
 	s, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(t.key)
 	return s, jti, err
@@ -145,5 +161,6 @@ func (t *TokenIssuer) VerifyAccess(token string) (authn.Principal, error) {
 	case err != nil || c.Scope == nil || c.Subject == "":
 		return authn.Principal{}, authn.ErrInvalid
 	}
-	return authn.Principal{Subject: c.Subject, Ward: c.Scope.Ward, Constituency: c.Scope.Constituency, County: c.Scope.County}, nil
+	return authn.Principal{Subject: c.Subject, Ward: c.Scope.Ward, Constituency: c.Scope.Constituency, County: c.Scope.County,
+		MFA: c.MFA}, nil
 }

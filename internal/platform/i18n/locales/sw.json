@@ -69,5 +69,9 @@
   "moderation.statement_invalid": "Eleza rufaa yako kwa herufi 1 hadi 2000.",
   "moderation.appeal_not_found": "Rufaa hiyo haipo.",
   "moderation.appeal_decided": "Rufaa hii tayari imeamuliwa.",
-  "moderation.invalid_decision": "Amua kuthibitisha au kubatilisha."
+  "moderation.invalid_decision": "Amua kuthibitisha au kubatilisha.",
+  "identity.mfa_required": "Thibitisha ni wewe kwa msimbo kutoka programu yako ya uthibitishaji.",
+  "identity.mfa_already_enabled": "Uthibitishaji wa hatua mbili tayari umewashwa.",
+  "identity.mfa_not_enrolled": "Weka kwanza uthibitishaji wa hatua mbili.",
+  "identity.mfa_invalid_code": "Msimbo huo si sahihi, au tayari umetumika."
 }

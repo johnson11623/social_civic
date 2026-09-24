@@ -21,6 +21,7 @@ type Principal struct {
 	Ward         int    // IEBC codes of the user's scope
 	Constituency int
 	County       int
+	MFA          bool // stepped up with TOTP for this access token (F-08)
 }
 
 // Verifier validates an access token.
@@ -69,4 +70,19 @@ func bearer(h string) (string, bool) {
 	}
 	t := strings.TrimSpace(h[len(prefix):])
 	return t, t != ""
+}
+
+// RequireMFA admits only access tokens issued after a TOTP step-up (F-08:
+// sysadmin, moderation, appeals, DPO, MSB). Others get 403 with code
+// "mfa_required" from reject, so clients know to prompt for a code.
+func RequireMFA(reject func(w http.ResponseWriter, r *http.Request)) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if p, ok := FromContext(r.Context()); !ok || !p.MFA {
+				reject(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

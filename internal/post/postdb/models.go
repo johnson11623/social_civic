@@ -255,6 +255,15 @@ type User struct {
 	MsisdnHash           []byte
 }
 
+type UserMfa struct {
+	UserID     int64
+	SecretEnc  []byte
+	KeyVersion string
+	EnabledAt  *time.Time
+	LastStep   int64
+	CreatedAt  time.Time
+}
+
 type VerificationAttempt struct {
 	ID          int64
 	IDHash      []byte

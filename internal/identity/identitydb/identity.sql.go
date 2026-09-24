@@ -13,6 +13,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const acceptMFAStep = `-- name: AcceptMFAStep :execrows
+UPDATE user_mfa SET last_step = $1, enabled_at = COALESCE(enabled_at, now())
+WHERE user_id = $2 AND last_step < $1
+`
+
+type AcceptMFAStepParams struct {
+	Step   int64
+	UserID int64
+}
+
+// Records a used code; enables MFA on first use. Refuses stale steps, so
+// two concurrent uses of one code can't both pass.
+func (q *Queries) AcceptMFAStep(ctx context.Context, arg AcceptMFAStepParams) (int64, error) {
+	result, err := q.db.Exec(ctx, acceptMFAStep, arg.Step, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const consumeOTP = `-- name: ConsumeOTP :execrows
 UPDATE otp_challenges
 SET consumed_at = now()
@@ -25,6 +45,15 @@ func (q *Queries) ConsumeOTP(ctx context.Context, id int64) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const deleteMFA = `-- name: DeleteMFA :exec
+DELETE FROM user_mfa WHERE user_id = $1
+`
+
+func (q *Queries) DeleteMFA(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, deleteMFA, userID)
+	return err
 }
 
 const getActiveOTPForUpdate = `-- name: GetActiveOTPForUpdate :one
@@ -73,6 +102,31 @@ func (q *Queries) GetConsent(ctx context.Context, arg GetConsentParams) (GetCons
 	row := q.db.QueryRow(ctx, getConsent, arg.UserID, arg.Version)
 	var i GetConsentRow
 	err := row.Scan(&i.GrantedAt, &i.WithdrawnAt)
+	return i, err
+}
+
+const getMFA = `-- name: GetMFA :one
+SELECT user_id, secret_enc, key_version, enabled_at, last_step FROM user_mfa WHERE user_id = $1
+`
+
+type GetMFARow struct {
+	UserID     int64
+	SecretEnc  []byte
+	KeyVersion string
+	EnabledAt  *time.Time
+	LastStep   int64
+}
+
+func (q *Queries) GetMFA(ctx context.Context, userID int64) (GetMFARow, error) {
+	row := q.db.QueryRow(ctx, getMFA, userID)
+	var i GetMFARow
+	err := row.Scan(
+		&i.UserID,
+		&i.SecretEnc,
+		&i.KeyVersion,
+		&i.EnabledAt,
+		&i.LastStep,
+	)
 	return i, err
 }
 
@@ -397,6 +451,28 @@ type RotateRefreshTokenParams struct {
 func (q *Queries) RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error {
 	_, err := q.db.Exec(ctx, rotateRefreshToken, arg.Jti, arg.ReplacedBy)
 	return err
+}
+
+const startMFAEnrolment = `-- name: StartMFAEnrolment :execrows
+INSERT INTO user_mfa (user_id, secret_enc, key_version) VALUES ($1, $2, $3)
+ON CONFLICT (user_id) DO UPDATE SET secret_enc = EXCLUDED.secret_enc, key_version = EXCLUDED.key_version,
+    last_step = 0, created_at = now()
+WHERE user_mfa.enabled_at IS NULL
+`
+
+type StartMFAEnrolmentParams struct {
+	UserID     int64
+	SecretEnc  []byte
+	KeyVersion string
+}
+
+// A new pending secret replaces an unfinished enrolment, never an enabled one.
+func (q *Queries) StartMFAEnrolment(ctx context.Context, arg StartMFAEnrolmentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, startMFAEnrolment, arg.UserID, arg.SecretEnc, arg.KeyVersion)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const withdrawConsent = `-- name: WithdrawConsent :one

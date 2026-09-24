@@ -243,6 +243,7 @@ func anonymizeUser(ctx context.Context, tx pgx.Tx, userID int64) error {
 		},
 		func() error { return q.ScrubConsentIPs(ctx, userID) },
 		func() error { return q.DeleteUserOTPs(ctx, userID) },
+		func() error { return q.DeleteMFA(ctx, userID) },
 		func() error {
 			_, err := q.RevokeAllUserRefreshTokens(ctx, identitydb.RevokeAllUserRefreshTokensParams{UserID: userID, Reason: "erasure"})
 			return err

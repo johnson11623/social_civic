@@ -69,5 +69,9 @@
   "moderation.statement_invalid": "Explain your appeal in 1 to 2000 characters.",
   "moderation.appeal_not_found": "No such appeal.",
   "moderation.appeal_decided": "This appeal has already been decided.",
-  "moderation.invalid_decision": "Decide to uphold or overturn."
+  "moderation.invalid_decision": "Decide to uphold or overturn.",
+  "identity.mfa_required": "Confirm it's you with a code from your authenticator app.",
+  "identity.mfa_already_enabled": "Two-step verification is already on.",
+  "identity.mfa_not_enrolled": "Set up two-step verification first.",
+  "identity.mfa_invalid_code": "That code isn't right, or has already been used."
 }

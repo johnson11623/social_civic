@@ -12,16 +12,21 @@ import (
 )
 
 type Querier interface {
+	// Records a used code; enables MFA on first use. Refuses stale steps, so
+	// two concurrent uses of one code can't both pass.
+	AcceptMFAStep(ctx context.Context, arg AcceptMFAStepParams) (int64, error)
 	AnonymizeUser(ctx context.Context, arg AnonymizeUserParams) error
 	ClaimPendingErasureStep(ctx context.Context) (ClaimPendingErasureStepRow, error)
 	CompleteErasureRequest(ctx context.Context, arg CompleteErasureRequestParams) error
 	ConsumeOTP(ctx context.Context, id int64) (int64, error)
 	CountUnfinishedErasureSteps(ctx context.Context, requestID int64) (int32, error)
+	DeleteMFA(ctx context.Context, userID int64) error
 	DeleteUserOTPs(ctx context.Context, userID int64) error
 	DeleteVerificationAttemptsForUser(ctx context.Context, id int64) error
 	FailErasureRequest(ctx context.Context, id int64) error
 	GetActiveOTPForUpdate(ctx context.Context, userID int64) (GetActiveOTPForUpdateRow, error)
 	GetConsent(ctx context.Context, arg GetConsentParams) (GetConsentRow, error)
+	GetMFA(ctx context.Context, userID int64) (GetMFARow, error)
 	GetRefreshTokenForUpdate(ctx context.Context, jti uuid.UUID) (GetRefreshTokenForUpdateRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	GetUserByNationalIDHash(ctx context.Context, nationalIDHash []byte) (GetUserByNationalIDHashRow, error)
@@ -43,6 +48,8 @@ type Querier interface {
 	RevokeAllUserRefreshTokens(ctx context.Context, arg RevokeAllUserRefreshTokensParams) (int64, error)
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
 	ScrubConsentIPs(ctx context.Context, userID int64) error
+	// A new pending secret replaces an unfinished enrolment, never an enabled one.
+	StartMFAEnrolment(ctx context.Context, arg StartMFAEnrolmentParams) (int64, error)
 	WithdrawConsent(ctx context.Context, arg WithdrawConsentParams) (*time.Time, error)
 }
 
