@@ -219,6 +219,9 @@ func run(logger *slog.Logger) error {
 	r.With(requireAuth, perUser("moderation", 100, time.Hour)).Post("/v1/moderation/actions", mod.Act)
 	r.With(requireAuth).Get("/v1/moderation/queue", mod.Queue)
 	r.With(requireAuth).Get("/v1/posts/{post_id}/moderation", mod.History)
+	r.With(requireAuth, requireConsent, perUser("appeal", 5, 24*time.Hour)).Post("/v1/appeals", mod.File) // LLD §8: 5 a day
+	r.With(requireAuth).Get("/v1/appeals", mod.Open)
+	r.With(requireAuth).Post("/v1/appeals/{appeal_id}/decision", mod.Decide)
 	r.With(requireAuth).Get("/v1/channels", channels.List)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}", channels.Get)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}/posts", channels.Posts)

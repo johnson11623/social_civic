@@ -13,4 +13,7 @@ func registerRoutes(r chi.Router, auth func(http.Handler) http.Handler, h *Handl
 	r.With(auth).Post("/v1/moderation/actions", h.Act)
 	r.With(auth).Get("/v1/moderation/queue", h.Queue)
 	r.With(auth).Get("/v1/posts/{post_id}/moderation", h.History)
+	r.With(auth).Post("/v1/appeals", h.File)
+	r.With(auth).Get("/v1/appeals", h.Open)
+	r.With(auth).Post("/v1/appeals/{appeal_id}/decision", h.Decide)
 }
