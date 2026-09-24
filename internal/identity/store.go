@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/johnson11623/social_civic/internal/identity/identitydb"
+	"github.com/johnson11623/social_civic/pkg/events"
+	"github.com/johnson11623/social_civic/pkg/outbox"
 )
 
 // ErrDuplicateNationalID is returned when the national ID hash is already registered.
@@ -40,8 +43,9 @@ type CreatedUser struct {
 
 // Store persists identity data.
 type Store interface {
-	// CreateUser inserts the user and their consent atomically.
-	CreateUser(ctx context.Context, u NewUser) (CreatedUser, error)
+	// CreateUser inserts the user, their consent, and the event returned by
+	// event (built from the new ids) into the outbox, atomically.
+	CreateUser(ctx context.Context, u NewUser, event func(CreatedUser) events.Event) (CreatedUser, error)
 }
 
 // PostgresStore implements Store on PostgreSQL.
@@ -56,7 +60,7 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 
 // CreateUser implements Store. The unique index on national_id_hash is the
 // duplicate check, so concurrent registrations of one ID cannot both succeed.
-func (s *PostgresStore) CreateUser(ctx context.Context, u NewUser) (CreatedUser, error) {
+func (s *PostgresStore) CreateUser(ctx context.Context, u NewUser, event func(CreatedUser) events.Event) (CreatedUser, error) {
 	var created CreatedUser
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := identitydb.New(tx)
@@ -82,7 +86,7 @@ func (s *PostgresStore) CreateUser(ctx context.Context, u NewUser) (CreatedUser,
 			return err
 		}
 		created = CreatedUser{ID: row.ID, PublicID: row.PublicID, CreatedAt: row.CreatedAt}
-		return nil
+		return outbox.Enqueue(ctx, tx, events.TopicUserRegistered, strconv.FormatInt(row.ID, 10), event(created))
 	})
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_national_id_hash_key" {

@@ -8,7 +8,8 @@ POSTGRES_PASSWORD  ?= civic
 POSTGRES_DB        ?= civic
 POSTGRES_PORT      ?= 5433
 POSTGRES_TEST_PORT ?= 55433
-export POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT POSTGRES_TEST_PORT
+KAFKA_PORT         ?= 19092
+export POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT POSTGRES_TEST_PORT KAFKA_PORT
 
 COMPOSE := docker compose
 
@@ -30,7 +31,7 @@ N ?= 1
 .PHONY: help db-up db-down db-reset db-logs db-ps db-psql db-url \
         migrate-up migrate-down migrate-down-all migrate-version migrate-force migrate-create \
         test-db test-db-up test-db-run test-db-down test-db-psql \
-        db-seed run-api test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
+        db-seed run-api run-worker kafka-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
 
 # Development-only secrets for run-api. Production uses KMS/Vault (T-X.4).
 DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
@@ -123,6 +124,12 @@ run-api: db-up migrate-up db-seed ## Run the API against the dev database (dev-o
 	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)" \
 	go run ./cmd/api
 
+kafka-up: ## Start the dev event bus (Redpanda, Kafka API on localhost:$(KAFKA_PORT))
+	$(COMPOSE) up -d --wait redpanda
+
+run-worker: db-up migrate-up kafka-up ## Run the outbox relay (publishes events to Kafka)
+	DATABASE_URL="$(HOST_DB_URL)" KAFKA_BROKERS="localhost:$(KAFKA_PORT)" go run ./cmd/worker
+
 test-api: ## Run the Postman collection with Newman against a running API (make run-api)
 	docker run --rm -v "$(CURDIR)/api/postman":/etc/newman postman/newman:6-alpine \
 		run civic-platform.postman_collection.json --env-var baseUrl=http://host.docker.internal:8090
@@ -139,10 +146,11 @@ vet: ## Run go vet
 test: ## Unit tests (integration tests skip without a database)
 	go test -race -count=1 ./...
 
-test-integration: ## Go tests against a fresh, migrated test database
-	@$(MAKE) test-db-up
+test-integration: ## Go tests against a fresh, migrated test database and the event bus
+	@$(MAKE) test-db-up kafka-up
 	@status=0; \
-	$(MIGRATE_TEST) up && TEST_DATABASE_URL="$(HOST_TEST_DB_URL)" go test -race -count=1 ./... || status=$$?; \
+	$(MIGRATE_TEST) up && TEST_DATABASE_URL="$(HOST_TEST_DB_URL)" KAFKA_BROKERS="localhost:$(KAFKA_PORT)" \
+		go test -race -count=1 -p 1 ./... || status=$$?; \
 	$(MAKE) test-db-down; exit $$status
 
 test-all: test-db test-integration ## SQL schema tests, then Go tests against a real database

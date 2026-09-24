@@ -23,17 +23,22 @@ var fixedNow = time.Date(2026, 3, 1, 8, 15, 0, 0, time.UTC)
 
 const testPepper = "test-pepper-0123456789abcdef0123"
 
+// fakeStore records users and the events that would be enqueued with them.
+// Like the real store, it enqueues an event only when the write succeeds.
 type fakeStore struct {
-	calls []NewUser
-	err   error
+	calls  []NewUser
+	events []events.Event
+	err    error
 }
 
-func (f *fakeStore) CreateUser(_ context.Context, u NewUser) (CreatedUser, error) {
+func (f *fakeStore) CreateUser(_ context.Context, u NewUser, event func(CreatedUser) events.Event) (CreatedUser, error) {
 	f.calls = append(f.calls, u)
 	if f.err != nil {
 		return CreatedUser{}, f.err
 	}
-	return CreatedUser{ID: 42, PublicID: u.PublicID, CreatedAt: u.ConsentAt}, nil
+	created := CreatedUser{ID: 42, PublicID: u.PublicID, CreatedAt: u.ConsentAt}
+	f.events = append(f.events, event(created))
+	return created, nil
 }
 
 type failingKeyring struct{}
@@ -45,7 +50,6 @@ func (failingKeyring) Current(context.Context, string) (kms.Key, error) {
 type fixture struct {
 	handler *RegisterHandler
 	store   *fakeStore
-	events  *events.Recorder
 	tokens  *TokenIssuer
 }
 
@@ -71,13 +75,12 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fixture{store: &fakeStore{}, events: &events.Recorder{}, tokens: tokens}
+	f := &fixture{store: &fakeStore{}, tokens: tokens}
 	f.handler = &RegisterHandler{
 		Store:    f.store,
 		Keyring:  keyring,
 		Boundary: testTree(t),
 		Tokens:   tokens,
-		Events:   f.events,
 		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Now:      func() time.Time { return fixedNow },
 	}
@@ -191,9 +194,9 @@ func TestRegister_Success(t *testing.T) {
 		t.Errorf("ip hash length = %d", len(u.IPHash))
 	}
 
-	// Exactly one user.registered event, with no national ID material.
-	evts := f.events.Events()
-	if len(evts) != 1 || evts[0].Type != EventUserRegistered || evts[0].SpecVersion != "1.0" {
+	// Exactly one user.registered event enqueued with the user, with no national ID material.
+	evts := f.store.events
+	if len(evts) != 1 || evts[0].Type != EventUserRegistered || evts[0].SpecVersion != "1.0" || evts[0].Source != "identity" || !evts[0].Time.Equal(fixedNow) {
 		t.Fatalf("events = %+v", evts)
 	}
 	payload, _ := json.Marshal(evts[0])
@@ -261,7 +264,7 @@ func TestRegister_Rejections(t *testing.T) {
 			if len(f.store.calls) != 0 {
 				t.Error("rejected request must not reach the store")
 			}
-			if len(f.events.Events()) != 0 {
+			if len(f.store.events) != 0 {
 				t.Error("rejected request must not publish events")
 			}
 		})
@@ -299,7 +302,7 @@ func TestRegister_DuplicateNationalID(t *testing.T) {
 	if p := decodeProblem(t, rec); p.Code != "id_already_registered" {
 		t.Errorf("code = %q", p.Code)
 	}
-	if len(f.events.Events()) != 0 {
+	if len(f.store.events) != 0 {
 		t.Error("duplicate must not publish events")
 	}
 }
@@ -328,15 +331,6 @@ func TestRegister_StoreFailureHidesDetails(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "10.0.0.5") {
 		t.Error("internal error details leaked to client")
-	}
-}
-
-func TestRegister_PublishFailureStillSucceeds(t *testing.T) {
-	f := newFixture(t)
-	f.events.Err = errors.New("broker down")
-	rec := f.post(t, validBody())
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("status = %d; the user is committed, so publish failure must not fail the request", rec.Code)
 	}
 }
 

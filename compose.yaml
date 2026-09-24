@@ -37,6 +37,26 @@ services:
       timeout: 3s
       retries: 30
 
+  # Kafka-compatible event bus for development and tests (stack: "Redpanda for dev").
+  # Host clients use localhost:${KAFKA_PORT:-19092}; containers use redpanda:9092.
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.18
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=512M
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:${KAFKA_PORT:-19092}
+    ports:
+      - "127.0.0.1:${KAFKA_PORT:-19092}:19092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
   # golang-migrate CLI, so nobody needs it installed locally.
   migrate:
     profiles: ["tools"]

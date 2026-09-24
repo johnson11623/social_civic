@@ -20,7 +20,6 @@ import (
 	"github.com/johnson11623/social_civic/internal/identity"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/requestid"
-	"github.com/johnson11623/social_civic/pkg/events"
 	"github.com/johnson11623/social_civic/pkg/kms"
 )
 
@@ -109,7 +108,6 @@ func run(logger *slog.Logger) error {
 		Keyring:  keyring,
 		Boundary: tree,
 		Tokens:   tokens,
-		Events:   events.LogPublisher{Logger: logger},
 		Logger:   logger,
 		Now:      time.Now,
 	}

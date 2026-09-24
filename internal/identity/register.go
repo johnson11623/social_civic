@@ -20,7 +20,7 @@ import (
 )
 
 // EventUserRegistered is the CloudEvents type for a completed registration.
-const EventUserRegistered = "user.registered"
+const EventUserRegistered = events.TopicUserRegistered
 
 const maxDisplayNameRunes = 100
 
@@ -77,7 +77,6 @@ type RegisterHandler struct {
 	Keyring  kms.Keyring
 	Boundary BoundaryResolver
 	Tokens   *TokenIssuer
-	Events   events.Publisher
 	Logger   *slog.Logger
 	Now      func() time.Time
 }
@@ -125,6 +124,19 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := h.Now().UTC()
+	// user.registered is enqueued in the same transaction as the user, so it is
+	// published if and only if the registration commits (T-1.1.1.7).
+	userRegistered := func(c CreatedUser) events.Event {
+		return events.New("identity", EventUserRegistered, now, UserRegisteredData{
+			UserID:         c.ID,
+			PublicID:       c.PublicID.String(),
+			WardID:         scope.Ward.Code,
+			ConstituencyID: scope.Constituency.Code,
+			CountyID:       scope.County.Code,
+			ConsentVersion: req.ConsentVersion,
+			KeyVersion:     pepper.Version,
+		})
+	}
 	created, err := h.Store.CreateUser(ctx, NewUser{
 		PublicID:       uuid.Must(uuid.NewV7()),
 		NationalIDHash: hashNationalID(req.NationalID, pepper.Material),
@@ -137,7 +149,7 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ConsentVersion: req.ConsentVersion,
 		ConsentAt:      now,
 		IPHash:         hashIP(clientIP(r), pepper.Material),
-	})
+	}, userRegistered)
 	if errors.Is(err, ErrDuplicateNationalID) {
 		problem.Write(w, r, http.StatusConflict, "id_already_registered", "This national ID is already registered.")
 		return
@@ -152,22 +164,6 @@ func (h *RegisterHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.fail(ctx, w, r, "issue tokens", err)
 		return
-	}
-
-	// The user is committed; a publish failure must not fail the request.
-	// T-1.1.1.7 replaces this with a transactional outbox so the event
-	// cannot be lost.
-	evt := events.New("identity", EventUserRegistered, now, UserRegisteredData{
-		UserID:         created.ID,
-		PublicID:       publicID,
-		WardID:         scope.Ward.Code,
-		ConstituencyID: scope.Constituency.Code,
-		CountyID:       scope.County.Code,
-		ConsentVersion: req.ConsentVersion,
-		KeyVersion:     pepper.Version,
-	})
-	if err := h.Events.Publish(ctx, evt); err != nil {
-		h.Logger.ErrorContext(ctx, "publish user.registered failed", "user_id", created.ID, "err", err)
 	}
 
 	httpjson.Write(w, http.StatusCreated, RegisterResponse{

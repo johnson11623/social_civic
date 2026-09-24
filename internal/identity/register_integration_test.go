@@ -5,6 +5,8 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,7 +25,7 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(context.Background(), "TRUNCATE users, consents, verification_attempts RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(context.Background(), "TRUNCATE users, consents, verification_attempts, outbox RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("reset tables (is the database migrated?): %v", err)
 	}
 	return pool
@@ -93,6 +95,30 @@ func TestRegisterIntegration_PersistsUserAndConsent(t *testing.T) {
 	if version != "2026-01" || withdrawn != nil || len(ipHash) != 32 {
 		t.Errorf("consent: version=%s withdrawn=%v ip_hash=%d bytes", version, withdrawn, len(ipHash))
 	}
+
+	// user.registered was enqueued in the same transaction, keyed by user id.
+	var topic, key, payload string
+	var userID int64
+	var published *string
+	if err := pool.QueryRow(context.Background(), `SELECT id FROM users`).Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	err = pool.QueryRow(context.Background(),
+		`SELECT topic, partition_key, payload::text, published_at::text FROM outbox`).Scan(&topic, &key, &payload, &published)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if topic != "user.registered" || key != strconv.FormatInt(userID, 10) || published != nil {
+		t.Errorf("outbox row: topic=%s key=%s published=%v", topic, key, published)
+	}
+	for _, want := range []string{`"type": "user.registered"`, `"specversion": "1.0"`, `"ward_id": 551`} {
+		if !strings.Contains(payload, want) {
+			t.Errorf("payload missing %s: %s", want, payload)
+		}
+	}
+	if strings.Contains(payload, "12345678") || strings.Contains(payload, "national_id") {
+		t.Errorf("outbox payload leaks national ID: %s", payload)
+	}
 }
 
 func TestRegisterIntegration_DuplicateIDReturns409(t *testing.T) {
@@ -112,6 +138,9 @@ func TestRegisterIntegration_DuplicateIDReturns409(t *testing.T) {
 	}
 	if n := count(t, pool, "SELECT count(*) FROM consents"); n != 1 {
 		t.Errorf("consents = %d, want 1 (failed insert must roll back)", n)
+	}
+	if n := count(t, pool, "SELECT count(*) FROM outbox"); n != 1 {
+		t.Errorf("outbox = %d, want 1 (a rolled-back registration must not emit an event)", n)
 	}
 }
 
@@ -138,6 +167,9 @@ func TestRegisterIntegration_ConcurrentDuplicatesOnlyOneWins(t *testing.T) {
 	if got := count(t, pool, "SELECT count(*) FROM users"); got != 1 {
 		t.Errorf("users = %d, want 1", got)
 	}
+	if got := count(t, pool, "SELECT count(*) FROM outbox"); got != 1 {
+		t.Errorf("outbox = %d, want 1", got)
+	}
 }
 
 func TestRegisterIntegration_RejectionsWriteNothing(t *testing.T) {
@@ -153,7 +185,7 @@ func TestRegisterIntegration_RejectionsWriteNothing(t *testing.T) {
 			t.Fatalf("expected rejection, got %d", rec.Code)
 		}
 	}
-	for _, table := range []string{"users", "consents", "verification_attempts"} {
+	for _, table := range []string{"users", "consents", "verification_attempts", "outbox"} {
 		if n := count(t, pool, "SELECT count(*) FROM "+table); n != 0 {
 			t.Errorf("%s has %d rows after rejected requests", table, n)
 		}
