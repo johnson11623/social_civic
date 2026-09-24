@@ -24,6 +24,20 @@ type AdminUnit struct {
 	UpdatedAt        time.Time
 }
 
+type Channel struct {
+	ID          int64
+	PublicID    uuid.UUID
+	WardID      int32
+	WardLevel   pgtype.Int2
+	CreatorID   pgtype.Int8
+	Name        string
+	Description pgtype.Text
+	Category    int16
+	ReadOnly    bool
+	State       int16
+	CreatedAt   time.Time
+}
+
 type Consent struct {
 	ID          int64
 	UserID      int64

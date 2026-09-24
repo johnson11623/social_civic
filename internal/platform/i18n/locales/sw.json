@@ -31,5 +31,12 @@
   "error.unauthenticated": "Tafadhali ingia ili kuendelea.",
   "identity.consent_not_found": "Hakuna idhini ya toleo hili iliyopatikana kwenye akaunti yako.",
   "identity.consent_withdrawn": "Huduma hii haipatikani kwa sababu umeondoa idhini yako.",
-  "identity.erasure_in_progress": "Tayari umeomba akaunti yako ifutwe. Ombi lako linashughulikiwa."
+  "identity.erasure_in_progress": "Tayari umeomba akaunti yako ifutwe. Ombi lako linashughulikiwa.",
+  "post.not_member": "Unaweza kufanya hivi katika wadi yako pekee.",
+  "post.channel_not_found": "Kituo hiki hakipo.",
+  "post.invalid_channel_name": "Tumia herufi ndogo au tarakimu 2–40, zenye kistari kimoja kati ya maneno, mfano maji-safi.",
+  "post.channel_name_reserved": "Jina hili limehifadhiwa. Tafadhali chagua jingine.",
+  "post.channel_name_taken": "Wadi yako tayari ina kituo chenye jina hili.",
+  "post.invalid_category": "Chagua mojawapo: general, services, opportunities, safety, culture.",
+  "post.description_too_long": "Maelezo yasizidi herufi 140."
 }

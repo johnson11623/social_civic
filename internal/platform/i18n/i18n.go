@@ -60,6 +60,14 @@ const (
 	// SMSLoginCode takes the code (%s) and its lifetime in minutes (%d).
 	MsgSMSLoginCode Key = "sms.login_code"
 
+	MsgNotMember           Key = "post.not_member"
+	MsgChannelNotFound     Key = "post.channel_not_found"
+	MsgInvalidChannelName  Key = "post.invalid_channel_name"
+	MsgChannelNameReserved Key = "post.channel_name_reserved"
+	MsgChannelNameTaken    Key = "post.channel_name_taken"
+	MsgInvalidCategory     Key = "post.invalid_category"
+	MsgDescriptionTooLong  Key = "post.description_too_long"
+
 	MsgSearchTooShort Key = "boundary.search_too_short"
 	MsgSearchTooLong  Key = "boundary.search_too_long"
 	MsgInvalidLevel   Key = "boundary.invalid_level"

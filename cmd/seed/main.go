@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/johnson11623/social_civic/internal/boundary"
+	"github.com/johnson11623/social_civic/internal/post"
 )
 
 func main() {
@@ -53,5 +54,11 @@ func run(dbURL, boundaryCSV string) error {
 	fmt.Printf("boundary %s seeded in %s: %d counties, %d constituencies, %d wards\n",
 		boundary.IEBC2022, time.Since(start).Round(time.Millisecond),
 		res.Units[boundary.LevelCounty], res.Units[boundary.LevelConstituency], res.Units[boundary.LevelWard])
+
+	created, err := post.EnsureGeneralChannels(ctx, pool)
+	if err != nil {
+		return fmt.Errorf("general channels: %w", err)
+	}
+	fmt.Printf("#general channels: %d created (one per ward)\n", created)
 	return nil
 }

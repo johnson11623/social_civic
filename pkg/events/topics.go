@@ -7,6 +7,7 @@ const (
 	TopicConsentWithdrawn = "consent.withdrawn"
 	TopicErasureRequested = "erasure.requested"
 	TopicUserErased       = "user.erased"
+	TopicChannelCreated   = "channel.created"
 )
 
 // AllTopics lists every topic the platform publishes to, for provisioning.
@@ -15,4 +16,5 @@ var AllTopics = []string{
 	TopicConsentWithdrawn,
 	TopicErasureRequested,
 	TopicUserErased,
+	TopicChannelCreated,
 }

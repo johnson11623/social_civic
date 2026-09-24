@@ -22,7 +22,7 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(context.Background(), "DELETE FROM admin_units WHERE level = 1; DELETE FROM admin_units WHERE level = 2; DELETE FROM admin_units WHERE level = 3; DELETE FROM admin_units"); err != nil {
+	if _, err := pool.Exec(context.Background(), "TRUNCATE channels CASCADE; DELETE FROM admin_units WHERE level = 1; DELETE FROM admin_units WHERE level = 2; DELETE FROM admin_units WHERE level = 3; DELETE FROM admin_units"); err != nil {
 		t.Fatalf("reset admin_units (is the database migrated?): %v", err)
 	}
 	return pool

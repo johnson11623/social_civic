@@ -30,3 +30,12 @@ sql:
         out: internal/boundary/boundarydb
         sql_package: pgx/v5
         emit_interface: true
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/post.sql
+    gen:
+      go:
+        package: postdb
+        out: internal/post/postdb
+        sql_package: pgx/v5
+        emit_interface: true

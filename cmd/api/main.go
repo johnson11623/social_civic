@@ -25,6 +25,7 @@ import (
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
 	"github.com/johnson11623/social_civic/internal/platform/problem"
 	"github.com/johnson11623/social_civic/internal/platform/requestid"
+	"github.com/johnson11623/social_civic/internal/post"
 	"github.com/johnson11623/social_civic/internal/sms"
 	"github.com/johnson11623/social_civic/pkg/kms"
 	"github.com/johnson11623/social_civic/pkg/ratelimit"
@@ -171,6 +172,11 @@ func run(logger *slog.Logger) error {
 	consent := &identity.ConsentHandlers{Store: identityStore, Logger: logger, Now: time.Now}
 	erasure := &identity.ErasureHandlers{Store: identityStore, Logger: logger, Now: time.Now}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
+	requireConsent := identity.RequireConsent(identityStore, logger)
+	channels := &post.ChannelHandlers{Store: post.NewStore(pool), Logger: logger}
+	// Per-user limit on channel creation (spam), after authentication.
+	channelLimit := ratelimit.Middleware(limiter, ratelimit.Rule{Name: "channel", Limit: 5, Window: time.Hour},
+		post.KeyByUser, tooManyRequests, logger)
 
 	r := chi.NewRouter()
 	r.Use(requestid.Middleware, middleware.Recoverer)
@@ -185,8 +191,12 @@ func run(logger *slog.Logger) error {
 	r.With(refreshLimit).Post("/v1/auth/refresh", auth.Refresh)
 	r.With(requireAuth).Post("/v1/users/me/consent/withdraw", consent.Withdraw)
 	r.With(requireAuth).Post("/v1/users/me/erasure", erasure.Request)
-	// Routes that process personal data (posting, interactions) go behind
-	// requireAuth + identity.RequireConsent(identityStore, logger) (T-1.1.3.3).
+
+	// Channel & Post (EPIC 2.1). Writes process personal data, so they also
+	// require active consent (T-1.1.3.3).
+	r.With(requireAuth).Get("/v1/channels", channels.List)
+	r.With(requireAuth).Get("/v1/channels/{channel_id}", channels.Get)
+	r.With(requireAuth, requireConsent, channelLimit).Post("/v1/channels", channels.Create)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

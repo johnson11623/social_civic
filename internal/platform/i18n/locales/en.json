@@ -31,5 +31,12 @@
   "error.unauthenticated": "Please log in to continue.",
   "identity.consent_not_found": "No consent with this version was found for your account.",
   "identity.consent_withdrawn": "This feature is unavailable because you have withdrawn your consent.",
-  "identity.erasure_in_progress": "You have already asked for your account to be deleted. It is being processed."
+  "identity.erasure_in_progress": "You have already asked for your account to be deleted. It is being processed.",
+  "post.not_member": "You can only do this in your own ward.",
+  "post.channel_not_found": "This channel does not exist.",
+  "post.invalid_channel_name": "Use 2–40 lowercase letters or numbers, with single hyphens between words, e.g. water-points.",
+  "post.channel_name_reserved": "This name is reserved. Please choose another.",
+  "post.channel_name_taken": "Your ward already has a channel with this name.",
+  "post.invalid_category": "Choose one of: general, services, opportunities, safety, culture.",
+  "post.description_too_long": "Keep the description to 140 characters or fewer."
 }
