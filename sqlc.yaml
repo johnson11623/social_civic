@@ -14,7 +14,7 @@ overrides:
 sql:
   - engine: postgresql
     schema: db/migrations
-    queries: db/queries/identity.sql
+    queries: [db/queries/identity.sql, db/queries/erasure.sql]
     gen:
       go:
         package: identitydb

@@ -169,6 +169,7 @@ func run(logger *slog.Logger) error {
 	}
 
 	consent := &identity.ConsentHandlers{Store: identityStore, Logger: logger, Now: time.Now}
+	erasure := &identity.ErasureHandlers{Store: identityStore, Logger: logger, Now: time.Now}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
 
 	r := chi.NewRouter()
@@ -183,6 +184,7 @@ func run(logger *slog.Logger) error {
 	r.With(loginLimit).Post("/v1/auth/login", auth.Login)
 	r.With(refreshLimit).Post("/v1/auth/refresh", auth.Refresh)
 	r.With(requireAuth).Post("/v1/users/me/consent/withdraw", consent.Withdraw)
+	r.With(requireAuth).Post("/v1/users/me/erasure", erasure.Request)
 	// Routes that process personal data (posting, interactions) go behind
 	// requireAuth + identity.RequireConsent(identityStore, logger) (T-1.1.3.3).
 

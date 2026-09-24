@@ -30,5 +30,6 @@
   "sms.login_code": "Your Civic Platform login code is %s. It expires in %d minutes. Never share this code with anyone.",
   "error.unauthenticated": "Please log in to continue.",
   "identity.consent_not_found": "No consent with this version was found for your account.",
-  "identity.consent_withdrawn": "This feature is unavailable because you have withdrawn your consent."
+  "identity.consent_withdrawn": "This feature is unavailable because you have withdrawn your consent.",
+  "identity.erasure_in_progress": "You have already asked for your account to be deleted. It is being processed."
 }

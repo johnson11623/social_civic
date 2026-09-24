@@ -33,6 +33,40 @@ type Consent struct {
 	IpHash      []byte
 }
 
+type DpoIncompleteErasure struct {
+	RequestID       uuid.UUID
+	UserID          int64
+	State           int16
+	RequestedAt     time.Time
+	CompletionBy    time.Time
+	Overdue         bool
+	UnfinishedSteps []string
+	FailedSteps     []string
+	LastError       string
+}
+
+type ErasureRequest struct {
+	ID             int64
+	PublicID       uuid.UUID
+	UserID         int64
+	Reason         pgtype.Text
+	State          int16
+	RequestedAt    time.Time
+	AckBy          time.Time
+	CompletionBy   time.Time
+	CompletedAt    *time.Time
+	RetainedFields []string
+}
+
+type ErasureStep struct {
+	RequestID int64
+	Step      string
+	State     int16
+	Attempts  int32
+	LastError pgtype.Text
+	UpdatedAt time.Time
+}
+
 type OtpChallenge struct {
 	ID            int64
 	UserID        int64

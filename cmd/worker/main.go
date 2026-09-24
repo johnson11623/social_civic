@@ -1,5 +1,6 @@
-// Command worker runs background processing. Today: the outbox relay that
-// publishes domain events to Kafka. Elevation and moderation workers join later.
+// Command worker runs background processing: the outbox relay that publishes
+// domain events to Kafka, and the erasure saga. Elevation and moderation
+// workers join later.
 package main
 
 import (
@@ -14,7 +15,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/johnson11623/social_civic/internal/identity"
 	"github.com/johnson11623/social_civic/pkg/events"
 	"github.com/johnson11623/social_civic/pkg/kafka"
 	"github.com/johnson11623/social_civic/pkg/outbox"
@@ -61,8 +64,13 @@ func run(logger *slog.Logger) error {
 	defer producer.Close()
 
 	relay := &outbox.Relay{Pool: pool, Producer: producer, Logger: logger}
-	logger.Info("worker started", "component", "outbox-relay", "topics", events.AllTopics)
-	err = relay.Run(ctx)
+	erasure := &identity.ErasureProcessor{Pool: pool, Logger: logger, Now: time.Now}
+
+	logger.Info("worker started", "components", []string{"outbox-relay", "erasure-saga"}, "topics", events.AllTopics)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error { return relay.Run(gctx) })
+	g.Go(func() error { return erasure.Run(gctx) })
+	err = g.Wait()
 	logger.Info("worker stopped")
 	return err
 }

@@ -5,10 +5,14 @@ package events
 const (
 	TopicUserRegistered   = "user.registered"
 	TopicConsentWithdrawn = "consent.withdrawn"
+	TopicErasureRequested = "erasure.requested"
+	TopicUserErased       = "user.erased"
 )
 
 // AllTopics lists every topic the platform publishes to, for provisioning.
 var AllTopics = []string{
 	TopicUserRegistered,
 	TopicConsentWithdrawn,
+	TopicErasureRequested,
+	TopicUserErased,
 }

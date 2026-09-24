@@ -30,5 +30,6 @@
   "sms.login_code": "Nambari yako ya kuingia kwenye Jukwaa la Kiraia ni %s. Itaisha baada ya dakika %d. Usimpe mtu yeyote nambari hii.",
   "error.unauthenticated": "Tafadhali ingia ili kuendelea.",
   "identity.consent_not_found": "Hakuna idhini ya toleo hili iliyopatikana kwenye akaunti yako.",
-  "identity.consent_withdrawn": "Huduma hii haipatikani kwa sababu umeondoa idhini yako."
+  "identity.consent_withdrawn": "Huduma hii haipatikani kwa sababu umeondoa idhini yako.",
+  "identity.erasure_in_progress": "Tayari umeomba akaunti yako ifutwe. Ombi lako linashughulikiwa."
 }

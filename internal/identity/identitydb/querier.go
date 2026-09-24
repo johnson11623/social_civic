@@ -12,7 +12,14 @@ import (
 )
 
 type Querier interface {
+	AnonymizeUser(ctx context.Context, arg AnonymizeUserParams) error
+	ClaimPendingErasureStep(ctx context.Context) (ClaimPendingErasureStepRow, error)
+	CompleteErasureRequest(ctx context.Context, arg CompleteErasureRequestParams) error
 	ConsumeOTP(ctx context.Context, id int64) (int64, error)
+	CountUnfinishedErasureSteps(ctx context.Context, requestID int64) (int32, error)
+	DeleteUserOTPs(ctx context.Context, userID int64) error
+	DeleteVerificationAttemptsForUser(ctx context.Context, id int64) error
+	FailErasureRequest(ctx context.Context, id int64) error
 	GetActiveOTPForUpdate(ctx context.Context, userID int64) (GetActiveOTPForUpdateRow, error)
 	GetConsent(ctx context.Context, arg GetConsentParams) (GetConsentRow, error)
 	GetRefreshTokenForUpdate(ctx context.Context, jti uuid.UUID) (GetRefreshTokenForUpdateRow, error)
@@ -21,15 +28,21 @@ type Querier interface {
 	GetUserIDByPublicID(ctx context.Context, publicID uuid.UUID) (GetUserIDByPublicIDRow, error)
 	HasActiveConsent(ctx context.Context, arg HasActiveConsentParams) (bool, error)
 	InsertConsent(ctx context.Context, arg InsertConsentParams) error
+	InsertErasureRequest(ctx context.Context, arg InsertErasureRequestParams) (int64, error)
+	InsertErasureStep(ctx context.Context, arg InsertErasureStepParams) error
 	// created_at and expires_at both come from the application clock, so clock
 	// skew between app and database cannot violate otp_expires_after_created.
 	InsertOTPChallenge(ctx context.Context, arg InsertOTPChallengeParams) (int64, error)
 	InsertRefreshToken(ctx context.Context, arg InsertRefreshTokenParams) error
 	InsertUser(ctx context.Context, arg InsertUserParams) (InsertUserRow, error)
 	InvalidateActiveOTPs(ctx context.Context, userID int64) error
+	ListIncompleteErasures(ctx context.Context) ([]DpoIncompleteErasure, error)
+	MarkErasureStepDone(ctx context.Context, arg MarkErasureStepDoneParams) error
+	RecordErasureStepFailure(ctx context.Context, arg RecordErasureStepFailureParams) (int16, error)
 	RecordFailedOTPAttempt(ctx context.Context, arg RecordFailedOTPAttemptParams) (int32, error)
 	RevokeAllUserRefreshTokens(ctx context.Context, arg RevokeAllUserRefreshTokensParams) (int64, error)
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
+	ScrubConsentIPs(ctx context.Context, userID int64) error
 	WithdrawConsent(ctx context.Context, arg WithdrawConsentParams) (*time.Time, error)
 }
 
