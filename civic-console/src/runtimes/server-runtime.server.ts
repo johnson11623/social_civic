@@ -10,6 +10,7 @@ import { ApiContract } from "@/api/api-contract";
 import { ApiImplLive } from "@/api/api-impl.server";
 import { ApiClient } from "@/services/api-client-tag";
 import { Backend } from "@/services/backend.server";
+import { withCsrfProtection } from "./csrf";
 
 const SsrApiClientLive = makeSsrApiClientLayer(ApiContract, ApiImplLive, ApiClient);
 
@@ -19,4 +20,4 @@ export const serverRuntime = ManagedRuntime.make(
 	SsrApiClientLive.pipe(Layer.provideMerge(Backend.Default), Layer.provideMerge(logger)),
 );
 
-export const apiHandler = mountApi(ApiContract, { serverRuntime, apiLayer: ApiImplLive });
+export const apiHandler = withCsrfProtection(mountApi(ApiContract, { serverRuntime, apiLayer: ApiImplLive }));

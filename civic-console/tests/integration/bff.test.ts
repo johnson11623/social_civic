@@ -1,50 +1,12 @@
-import {
-	HttpApiBuilder,
-	HttpApiClient,
-	HttpClient,
-	type HttpClientRequest,
-	HttpClientResponse,
-	HttpServer,
-	UrlParams,
-} from "@effect/platform";
-import { ConfigProvider, Effect, Either, Layer } from "effect";
+import { HttpApiClient, HttpClient, HttpClientResponse } from "@effect/platform";
+import { Effect, Layer } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ApiContract } from "@/api/api-contract";
-import { ApiImplLive } from "@/api/api-impl.server";
-import { Backend } from "@/services/backend.server";
+import { fakeGo, fullUrl, bff as makeBff } from "./harness";
 
 // W1.1.2 — the BFF handlers end to end: browser request → /api/* handler →
 // Backend client → (fake) Go API, and back through the typed client.
-
-type Seen = { url: string; headers: Record<string, string> };
-
-/** The full URL as the real fetch client would send it (url + urlParams). */
-const fullUrl = (request: HttpClientRequest.HttpClientRequest) =>
-	Either.getOrThrow(UrlParams.makeUrl(request.url, request.urlParams, request.hash)).toString();
-
-function fakeGo(respond: (url: URL) => { status: number; body: unknown } | "network-error") {
-	const seen: Seen[] = [];
-	const layer = Layer.succeed(
-		HttpClient.HttpClient,
-		HttpClient.make((request) => {
-			const url = new URL(fullUrl(request));
-			seen.push({ url: url.toString(), headers: { ...request.headers } });
-			const r = respond(url);
-			if (r === "network-error") return Effect.die(new Error("unreachable")) as never;
-			return Effect.succeed(
-				HttpClientResponse.fromWeb(
-					request,
-					new Response(JSON.stringify(r.body), {
-						status: r.status,
-						headers: { "content-type": "application/json" },
-					}),
-				),
-			);
-		}),
-	);
-	return { seen, layer };
-}
 
 let dispose: (() => Promise<void>) | undefined;
 afterEach(async () => {
@@ -53,13 +15,7 @@ afterEach(async () => {
 });
 
 function bff(go: ReturnType<typeof fakeGo>) {
-	const backend = Backend.DefaultWithoutDependencies.pipe(
-		Layer.provide(go.layer),
-		Layer.provide(Layer.setConfigProvider(ConfigProvider.fromJson({ BACKEND_URL: "http://go.test" }))),
-	);
-	const web = HttpApiBuilder.toWebHandler(
-		Layer.mergeAll(ApiImplLive.pipe(Layer.provide(backend)), HttpServer.layerContext),
-	);
+	const web = makeBff(go);
 	dispose = web.dispose;
 	return web.handler;
 }

@@ -11,12 +11,21 @@ import { Effect, Layer, Schema } from "effect";
 import {
 	ApiContract,
 	BoundaryTree,
+	Group,
 	SearchResponse,
+	type Session,
 	UpstreamError,
-	type ValidationFailed,
 } from "@/api/api-contract";
 import { isLang, LANG_COOKIE } from "@/lib/i18n/lang";
 import { Backend } from "@/services/backend.server";
+import {
+	clearSessionCookies,
+	clientIp,
+	currentSession,
+	GoTokens,
+	sessionFromAccessToken,
+	setSessionCookies,
+} from "@/services/session.server";
 
 /**
  * Language to request from the Go API: the user's explicit choice (`lang`
@@ -28,9 +37,8 @@ const acceptLanguage = Effect.map(HttpServerRequest.HttpServerRequest, (req) => 
 	return isLang(chosen) ? chosen : req.headers["accept-language"];
 });
 
-/** For endpoints that take no input, a 422 from the platform is an upstream fault. */
-const asUpstream = (e: ValidationFailed) =>
-	Effect.fail(new UpstreamError({ status: 422, code: e.code, detail: e.detail }));
+/** Options every proxied call carries: language and the browser's IP. */
+const callerContext = Effect.all({ acceptLanguage, forwardedFor: clientIp });
 
 const SystemLive = HttpApiBuilder.group(ApiContract, "system", (handlers) =>
 	handlers.handle("health", () =>
@@ -50,20 +58,131 @@ const BoundaryLive = HttpApiBuilder.group(ApiContract, "boundary", (handlers) =>
 		.handle("tree", () =>
 			Effect.gen(function* () {
 				const backend = yield* Backend;
-				return yield* backend
-					.get("/v1/boundary/tree", BoundaryTree, { acceptLanguage: yield* acceptLanguage })
-					.pipe(Effect.catchTag("ValidationFailed", asUpstream));
-			}),
+				return yield* backend.get("/v1/boundary/tree", BoundaryTree, yield* callerContext);
+			}).pipe(Effect.catchTags(narrowTo("RateLimited", "BackendUnavailable", "UpstreamError"))),
 		)
 		.handle("search", ({ urlParams }) =>
 			Effect.gen(function* () {
 				const backend = yield* Backend;
 				return yield* backend.get("/v1/boundary/search", SearchResponse, {
 					urlParams,
-					acceptLanguage: yield* acceptLanguage,
+					...(yield* callerContext),
 				});
+			}).pipe(
+				Effect.catchTags(narrowTo("ValidationFailed", "RateLimited", "BackendUnavailable", "UpstreamError")),
+			),
+		),
+);
+
+const GoRegistered = Schema.Struct({ display_name: Schema.String, groups: Schema.Array(Group) });
+const GoOtp = Schema.Struct({ otp_requested: Schema.Boolean, expires_in: Schema.Int });
+
+const AuthLive = HttpApiBuilder.group(ApiContract, "auth", (handlers) =>
+	handlers
+		// Registration does not start a session: the phone is verified first
+		// with an SMS code (requestOtp + login), which then signs the user in.
+		.handle("register", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				const res = yield* backend.post("/v1/auth/register", GoRegistered, {
+					...(yield* callerContext),
+					body: {
+						national_id: payload.nationalId,
+						display_name: payload.displayName,
+						preferred_lang: payload.preferredLang,
+						phone: payload.phone,
+						ward_id: payload.wardId,
+						consent_version: payload.consentVersion,
+						consent_granted: payload.consentGranted,
+					},
+				});
+				return { displayName: res.display_name, groups: res.groups };
+			}).pipe(
+				Effect.catchTags(
+					narrowTo(
+						"InvalidInput",
+						"Conflict",
+						"ValidationFailed",
+						"RateLimited",
+						"BackendUnavailable",
+						"UpstreamError",
+					),
+				),
+			),
+		)
+		.handle("requestOtp", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				const res = yield* backend.post("/v1/auth/otp", GoOtp, {
+					...(yield* callerContext),
+					body: { national_id: payload.nationalId },
+				});
+				return { expiresIn: res.expires_in };
+			}).pipe(
+				Effect.catchTags(narrowTo("InvalidInput", "RateLimited", "BackendUnavailable", "UpstreamError")),
+			),
+		)
+		.handle("login", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				const tokens = yield* backend.post("/v1/auth/login", GoTokens, {
+					...(yield* callerContext),
+					body: { national_id: payload.nationalId, otp: payload.otp },
+				});
+				yield* setSessionCookies(tokens);
+				return sessionFromAccessToken(tokens.access_token, Math.floor(Date.now() / 1000));
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("InvalidInput", "Unauthorized", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("session", () => currentSession)
+		.handle("logout", () =>
+			Effect.gen(function* () {
+				yield* clearSessionCookies;
+				return { authenticated: false } satisfies Session;
 			}),
 		),
 );
 
-export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(Layer.provide([SystemLive, BoundaryLive]));
+/**
+ * Keep the errors an endpoint declares; report any other platform error as
+ * UpstreamError so the contract's error types stay exact.
+ */
+type Tag =
+	| "InvalidInput"
+	| "Unauthorized"
+	| "Conflict"
+	| "ValidationFailed"
+	| "RateLimited"
+	| "BackendUnavailable"
+	| "UpstreamError";
+function narrowTo<const K extends Tag>(...keep: K[]) {
+	const all: Tag[] = [
+		"InvalidInput",
+		"Unauthorized",
+		"Conflict",
+		"ValidationFailed",
+		"RateLimited",
+		"BackendUnavailable",
+		"UpstreamError",
+	];
+	return Object.fromEntries(
+		all
+			.filter((t) => !(keep as Tag[]).includes(t))
+			.map((t) => [
+				t,
+				(e: { code?: string; detail?: string }) =>
+					Effect.fail(
+						new UpstreamError({ status: 502, code: e.code ?? "upstream_error", detail: e.detail ?? "" }),
+					),
+			]),
+	) as {
+		[T in Exclude<Tag, K>]: (e: { code?: string; detail?: string }) => Effect.Effect<never, UpstreamError>;
+	};
+}
+
+export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(
+	Layer.provide([SystemLive, BoundaryLive, AuthLive]),
+);
