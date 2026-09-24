@@ -77,6 +77,14 @@ const (
 	MsgLikeNotFound        Key = "post.like_not_found"
 	MsgPostNotActive       Key = "post.not_active"
 
+	MsgInsufficientAuthority Key = "membership.insufficient_authority"
+	MsgAlreadyAssigned       Key = "membership.already_assigned"
+	MsgInvalidRole           Key = "membership.invalid_role"
+	MsgInvalidUnit           Key = "membership.invalid_unit"
+	MsgNotInGroup            Key = "membership.not_in_group"
+	MsgUserNotFound          Key = "membership.user_not_found"
+	MsgInvalidTerm           Key = "membership.invalid_term"
+
 	MsgSearchTooShort Key = "boundary.search_too_short"
 	MsgSearchTooLong  Key = "boundary.search_too_long"
 	MsgInvalidLevel   Key = "boundary.invalid_level"

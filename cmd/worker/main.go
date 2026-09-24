@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/johnson11623/social_civic/internal/identity"
+	"github.com/johnson11623/social_civic/internal/membership"
 	"github.com/johnson11623/social_civic/internal/post"
 	"github.com/johnson11623/social_civic/pkg/events"
 	"github.com/johnson11623/social_civic/pkg/kafka"
@@ -65,7 +66,9 @@ func run(logger *slog.Logger) error {
 	defer producer.Close()
 
 	relay := &outbox.Relay{Pool: pool, Producer: producer, Logger: logger}
-	erasure := &identity.ErasureProcessor{Pool: pool, Logger: logger, Now: time.Now}
+	steps := identity.DefaultErasureSteps()
+	steps[identity.StepMembershipRevoke] = membership.RevokeRolesStep
+	erasure := &identity.ErasureProcessor{Pool: pool, Logger: logger, Now: time.Now, Steps: steps}
 
 	logger.Info("worker started", "components", []string{"outbox-relay", "erasure-saga", "post-partitions"}, "topics", events.AllTopics)
 	g, gctx := errgroup.WithContext(ctx)

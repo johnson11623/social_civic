@@ -47,5 +47,12 @@
   "post.out_of_scope": "Chapisho hili halionekani katika eneo lako.",
   "post.already_liked": "Tayari umependa chapisho hili.",
   "post.like_not_found": "Hujapenda chapisho hili.",
-  "post.not_active": "Chapisho hili haliwezi kupendwa wala kujibiwa kwa sasa."
+  "post.not_active": "Chapisho hili haliwezi kupendwa wala kujibiwa kwa sasa.",
+  "membership.insufficient_authority": "Huna mamlaka ya kufanya hivyo.",
+  "membership.already_assigned": "Mtu huyu tayari ana jukumu katika kikundi hicho.",
+  "membership.invalid_role": "Jukumu la msimamizi halijulikani.",
+  "membership.invalid_unit": "Wadi, eneo bunge au kaunti hiyo haipo.",
+  "membership.not_in_group": "Msimamizi lazima aishi katika kikundi anachosimamia.",
+  "membership.user_not_found": "Hakuna mtumiaji hai mwenye kitambulisho hicho.",
+  "membership.invalid_term": "Muhula lazima uishe siku zijazo."
 }

@@ -20,6 +20,7 @@ import (
 
 	"github.com/johnson11623/social_civic/internal/boundary"
 	"github.com/johnson11623/social_civic/internal/identity"
+	"github.com/johnson11623/social_civic/internal/membership"
 	"github.com/johnson11623/social_civic/internal/platform/authn"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
@@ -177,6 +178,7 @@ func run(logger *slog.Logger) error {
 	erasure := &identity.ErasureHandlers{Store: identityStore, Logger: logger, Now: time.Now}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
 	requireConsent := identity.RequireConsent(identityStore, logger)
+	roles := &membership.Handlers{Store: membership.NewStore(pool), Logger: logger, Now: time.Now}
 	channels := &post.ChannelHandlers{Store: post.NewStore(pool), Wards: tree, Logger: logger}
 	// Per-user limit on channel creation (spam), after authentication.
 	perUser := func(name string, n int, window time.Duration) func(http.Handler) http.Handler {
@@ -207,6 +209,8 @@ func run(logger *slog.Logger) error {
 
 	// Channel & Post (EPIC 2.1). Writes process personal data, so they also
 	// require active consent (T-1.1.3.3).
+	r.With(requireAuth).Get("/v1/users/me/roles", roles.MyRoles)
+	r.With(requireAuth).Post("/v1/moderators", roles.Appoint)
 	r.With(requireAuth).Get("/v1/channels", channels.List)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}", channels.Get)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}/posts", channels.Posts)

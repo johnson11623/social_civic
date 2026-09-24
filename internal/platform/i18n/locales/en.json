@@ -47,5 +47,12 @@
   "post.out_of_scope": "This post isn't visible in your area.",
   "post.already_liked": "You already like this post.",
   "post.like_not_found": "You haven't liked this post.",
-  "post.not_active": "This post can't be liked or replied to right now."
+  "post.not_active": "This post can't be liked or replied to right now.",
+  "membership.insufficient_authority": "You don't have the authority to do that.",
+  "membership.already_assigned": "This person already holds a role in that group.",
+  "membership.invalid_role": "Unknown moderator role.",
+  "membership.invalid_unit": "That ward, constituency or county doesn't exist.",
+  "membership.not_in_group": "A moderator must live in the group they moderate.",
+  "membership.user_not_found": "No active user with that id.",
+  "membership.invalid_term": "The term must end in the future."
 }

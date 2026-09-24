@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/johnson11623/social_civic/internal/membership"
 	"io"
 	"log/slog"
 	"net/http"
@@ -38,7 +39,7 @@ func newErasureFixture(t *testing.T) *erasureFixture {
 	c.router = r
 	return &erasureFixture{
 		consentFixture: c,
-		processor:      &ErasureProcessor{Pool: c.pool, Logger: logger, Now: c.clock},
+		processor:      &ErasureProcessor{Pool: c.pool, Logger: logger, Now: c.clock, Steps: workerSteps()},
 	}
 }
 
@@ -120,7 +121,7 @@ func TestErasureIntegration_RequestAndComplete(t *testing.T) {
 		"SELECT count(*) FROM dpo_incomplete_erasures":                     0,
 		"SELECT count(*) FROM outbox WHERE topic = 'user.erased'":          1,
 		"SELECT count(*) FROM users WHERE msisdn_hash IS NOT NULL":         0,
-		"SELECT count(*) FROM erasure_steps WHERE state = 2":               1,
+		"SELECT count(*) FROM erasure_steps WHERE state = 2":               len(ErasureSteps),
 		"SELECT count(*) FROM erasure_requests WHERE completed_at IS NULL": 0,
 	} {
 		if n := count(t, e.pool, q); n != want {
@@ -160,19 +161,20 @@ func TestErasureIntegration_FailedStepShowsOnDPOView(t *testing.T) {
 	// T-1.1.3.9: simulate a partial failure. The step writes, then fails:
 	// its writes must roll back (savepoint), and after the retry limit the
 	// request must surface on the DPO view.
-	e.processor.Steps = map[string]StepFunc{StepIdentityAnonymize: func(ctx context.Context, tx pgx.Tx, userID int64) error {
+	e.processor.Steps = workerSteps()
+	e.processor.Steps[StepIdentityAnonymize] = func(ctx context.Context, tx pgx.Tx, userID int64) error {
 		if _, err := tx.Exec(ctx, "UPDATE users SET display_name = 'half-done' WHERE id = $1", userID); err != nil {
 			return err
 		}
 		return errors.New("membership service unavailable")
-	}}
+	}
 	e.drain(t)
 
 	if n := count(t, e.pool, "SELECT count(*) FROM users WHERE display_name = 'half-done'"); n != 0 {
 		t.Error("a failed step's writes were committed")
 	}
 	var attempts int
-	_ = e.pool.QueryRow(ctx, "SELECT attempts FROM erasure_steps").Scan(&attempts)
+	_ = e.pool.QueryRow(ctx, "SELECT attempts FROM erasure_steps WHERE step = $1", StepIdentityAnonymize).Scan(&attempts)
 	if attempts != ErasureStepMaxAttempts {
 		t.Errorf("attempts = %d, want %d", attempts, ErasureStepMaxAttempts)
 	}
@@ -215,17 +217,19 @@ func TestErasureIntegration_ConcurrentProcessorsRunStepOnce(t *testing.T) {
 	e := newErasureFixture(t)
 	e.request(t)
 	var runs atomic.Int32
-	e.processor.Steps = map[string]StepFunc{StepIdentityAnonymize: func(ctx context.Context, tx pgx.Tx, userID int64) error {
+	e.processor.Steps = workerSteps()
+	e.processor.Steps[StepIdentityAnonymize] = func(ctx context.Context, tx pgx.Tx, userID int64) error {
 		runs.Add(1)
 		time.Sleep(50 * time.Millisecond)
 		return anonymizeUser(ctx, tx, userID)
-	}}
+	}
 	var wg sync.WaitGroup
 	for i := 0; i < 4; i++ {
 		wg.Add(1)
 		go func() { defer wg.Done(); _, _ = e.processor.RunOnce(context.Background()) }()
 	}
 	wg.Wait()
+	e.drain(t) // whatever steps the racing processors left
 	if n := runs.Load(); n != 1 {
 		t.Errorf("step ran %d times, want 1", n)
 	}
@@ -246,3 +250,10 @@ func TestErasureIntegration_ReasonTooLong(t *testing.T) {
 }
 
 func jsonDecode(b []byte, v any) error { return json.Unmarshal(b, v) }
+
+// workerSteps mirrors cmd/worker: identity's steps plus membership's.
+func workerSteps() map[string]StepFunc {
+	steps := DefaultErasureSteps()
+	steps[StepMembershipRevoke] = membership.RevokeRolesStep
+	return steps
+}

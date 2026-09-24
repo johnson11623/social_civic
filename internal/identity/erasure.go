@@ -33,6 +33,7 @@ const (
 	ErasureCompleteWithin  = 30 * 24 * time.Hour
 	ErasureStepMaxAttempts = 5
 	StepIdentityAnonymize  = "identity.anonymize"
+	StepMembershipRevoke   = "membership.revoke_roles"
 	maxErasureReasonRunes  = 500
 	erasureStatePending    = 1
 	erasureStateCompleted  = 2
@@ -42,10 +43,12 @@ const (
 )
 
 // ErasureSteps are the saga steps created for every request. Membership
-// (remove groups) and Channel & Post (tombstone authored content) add theirs
-// when those services are built; posts already render the author as
-// "[deleted user]" because the display name is overwritten.
-var ErasureSteps = []string{StepIdentityAnonymize}
+// revokes the user's roles (its step is registered by the worker); Channel
+// & Post (tombstone authored content) adds its own when built. Posts already
+// render the author as "[deleted user]" because the display name is
+// overwritten. Group membership needs no step: it is the scope on the user
+// row, which anonymization clears.
+var ErasureSteps = []string{StepIdentityAnonymize, StepMembershipRevoke}
 
 // RetainedAfterErasure is reported to the user and the audit log (T-1.1.3.8):
 // what is kept after erasure and why.

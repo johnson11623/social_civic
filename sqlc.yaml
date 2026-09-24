@@ -39,3 +39,12 @@ sql:
         out: internal/post/postdb
         sql_package: pgx/v5
         emit_interface: true
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/membership.sql
+    gen:
+      go:
+        package: membershipdb
+        out: internal/membership/membershipdb
+        sql_package: pgx/v5
+        emit_interface: true

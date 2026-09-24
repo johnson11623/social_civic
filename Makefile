@@ -32,7 +32,7 @@ N ?= 1
 .PHONY: help db-up db-down db-reset db-logs db-ps db-psql db-url \
         migrate-up migrate-down migrate-down-all migrate-version migrate-force migrate-create \
         test-db test-db-up test-db-run test-db-down test-db-psql \
-        db-seed run-api run-worker kafka-up redis-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
+        db-seed admin-grant run-api run-worker kafka-up redis-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
 
 # Development-only secrets for run-api. Production uses KMS/Vault (T-X.4).
 DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
@@ -121,6 +121,9 @@ test-db-psql: ## Open psql in the running test database
 
 db-seed: ## Load reference data (IEBC counties, constituencies, wards) into the dev database
 	go run ./cmd/seed -database "$(HOST_DB_URL)"
+
+admin-grant: ## Grant a platform role in the dev database: make admin-grant USER_ID=<public id> ROLE=sysadmin
+	go run ./cmd/admin -database "$(HOST_DB_URL)" -user "$(USER_ID)" -role "$(or $(ROLE),sysadmin)"
 
 run-api: db-up migrate-up db-seed redis-up ## Run the API against the dev database (dev-only secrets)
 	DATABASE_URL="$(HOST_DB_URL)" \

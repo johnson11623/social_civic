@@ -175,6 +175,24 @@ type RefreshToken struct {
 	ReplacedBy   pgtype.UUID
 }
 
+type Role struct {
+	Code       string
+	ScopeLevel pgtype.Int2
+}
+
+type RoleAssignment struct {
+	ID          int64
+	PublicID    uuid.UUID
+	UserID      int64
+	RoleCode    string
+	UnitLevel   pgtype.Int2
+	UnitCode    pgtype.Int4
+	AppointedBy pgtype.Int8
+	AppointedAt time.Time
+	TermEnd     *time.Time
+	RevokedAt   *time.Time
+}
+
 type User struct {
 	ID                   int64
 	PublicID             uuid.UUID
