@@ -2,7 +2,6 @@ import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense } from "react";
 
 import { SessionKeeper } from "@/components/auth/SessionKeeper";
-import { SiteFooter } from "@/components/layout/SiteFooter";
 import { type HeaderUser, SiteHeader } from "@/components/layout/SiteHeader";
 import { ToastProvider } from "@/components/ui/Toast";
 import { settle } from "@/lib/api-errors";
@@ -61,8 +60,6 @@ function RootDocument({ children }: { children: ReactNode }) {
 					<ToastProvider>
 						<SiteHeader user={user} />
 						{children}
-						{/* Signed-in users change language on their account page. */}
-						{!user && <SiteFooter />}
 						<SessionKeeper />
 					</ToastProvider>
 				</I18nProvider>
