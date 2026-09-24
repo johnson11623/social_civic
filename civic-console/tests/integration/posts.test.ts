@@ -134,6 +134,7 @@ describe("channels and posts", () => {
 						name: "general",
 						category: "general",
 						read_only: false,
+						can_post: true,
 						state: "active",
 						created_at: "x",
 					},
@@ -257,5 +258,82 @@ describe("post detail and replies", () => {
 		const { handler } = start(() => problem(409, "post_not_active"));
 		const res = await handler(req("POST", "/api/posts/p1/replies", { content: "x" }));
 		expect(await res.json()).toMatchObject({ _tag: "Conflict", code: "post_not_active" });
+	});
+});
+
+describe("channel creation and views (W2.1)", () => {
+	it("creates a read-only channel with snake_case fields", async () => {
+		const { go, handler } = start(() => ({
+			status: 201,
+			body: {
+				channel_id: "c9",
+				ward_id: 551,
+				name: "mca-updates",
+				category: "safety",
+				read_only: true,
+				can_post: true,
+				state: "active",
+				created_at: "x",
+			},
+		}));
+		const res = await handler(
+			req("POST", "/api/channels", { name: "mca-updates", category: "safety", read_only: true }),
+		);
+		expect(res.status).toBe(201);
+		expect(go.seen[0]?.body).toEqual({
+			name: "mca-updates",
+			description: "",
+			category: "safety",
+			read_only: true,
+		});
+	});
+
+	it("gets a channel and its posts with cursor", async () => {
+		const { go, handler } = start((url) =>
+			url.pathname.endsWith("/posts")
+				? { status: 200, body: { channel_id: "c1", items: [goPost()], next_cursor: "n", has_more: true } }
+				: {
+						status: 200,
+						body: {
+							channel_id: "c1",
+							ward_id: 551,
+							name: "water",
+							category: "services",
+							read_only: false,
+							can_post: true,
+							member_count: 7,
+							state: "active",
+							created_at: "x",
+						},
+					},
+		);
+		expect(await (await handler(req("GET", "/api/channels/c1"))).json()).toMatchObject({
+			member_count: 7,
+			can_post: true,
+		});
+		expect(await (await handler(req("GET", "/api/channels/c1/posts?cursor=abc"))).json()).toMatchObject({
+			has_more: true,
+			next_cursor: "n",
+		});
+		expect(go.seen.map((s) => `${new URL(s.url).pathname}${new URL(s.url).search}`)).toEqual([
+			"/v1/channels/c1",
+			"/v1/channels/c1/posts?cursor=abc",
+		]);
+	});
+
+	it("passes the ward header through the channel list", async () => {
+		const { handler } = start(() => ({
+			status: 200,
+			body: {
+				ward_id: 551,
+				member_count: 2,
+				ward: { ward_id: 551, name: "Kiamwangi", constituency: "Gatundu South", county: "Kiambu" },
+				items: [],
+			},
+		}));
+		expect(await (await handler(req("GET", "/api/channels"))).json()).toMatchObject({
+			member_count: 2,
+			ward: { name: "Kiamwangi", county: "Kiambu" },
+		});
 	});
 });

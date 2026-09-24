@@ -1,8 +1,9 @@
 import type { Level } from "@/api/api-contract";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { LEVELS } from "@/lib/levels";
 
-export const LEVELS: readonly Level[] = ["ward", "constituency", "county", "national"];
+export { LEVELS } from "@/lib/levels";
 
 /**
  * Atom: LevelIndicator (T-W1.2.2.6) — the 4-dot motif: Ward ●○○○ →

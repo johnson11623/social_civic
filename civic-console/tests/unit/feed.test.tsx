@@ -54,9 +54,23 @@ function post(over: Partial<Post> = {}): Post {
 }
 
 const channels: Channel[] = [
-	{ channelId: "c-general", wardId: 551, name: "general", category: "general", readOnly: false },
-	{ channelId: "c-water", wardId: 551, name: "water", category: "services", readOnly: false },
-	{ channelId: "c-news", wardId: 551, name: "announcements", category: "general", readOnly: true },
+	{
+		channelId: "c-general",
+		wardId: 551,
+		name: "general",
+		category: "general",
+		readOnly: false,
+		canPost: true,
+	},
+	{ channelId: "c-water", wardId: 551, name: "water", category: "services", readOnly: false, canPost: true },
+	{
+		channelId: "c-news",
+		wardId: 551,
+		name: "announcements",
+		category: "general",
+		readOnly: true,
+		canPost: false,
+	},
 ];
 
 const page = (items: Post[], more?: string): FeedPage => ({
@@ -191,7 +205,7 @@ describe("PostCard (T-W1.4.1.3–T-W1.4.1.5)", () => {
 		await renderHome([post({ level: "constituency", score: 143.7, counts: { likes: 42, replies: 8 } })]);
 		expect(screen.getByText("Elevated from Ward to Constituency")).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Why am I seeing this?" }));
-		const dialog = screen.getByRole("dialog", { name: "Why you're seeing this" });
+		const dialog = await screen.findByRole("dialog", { name: "Why you're seeing this" });
 		expect(dialog).toHaveTextContent("143.7");
 		expect(dialog).toHaveTextContent("42 likes · 8 replies");
 		expect(dialog).toHaveTextContent(
@@ -203,7 +217,7 @@ describe("PostCard (T-W1.4.1.3–T-W1.4.1.5)", () => {
 		const user = userEvent.setup();
 		await renderHome([post()], { lang: "sw" });
 		await user.click(screen.getByRole("button", { name: "Kwa nini naona hili?" }));
-		expect(screen.getByRole("dialog")).toHaveTextContent(/Chapisho hili ni la wadi yako/);
+		expect(await screen.findByRole("dialog")).toHaveTextContent(/Chapisho hili ni la wadi yako/);
 	});
 
 	it("keeps a removed post's place with a notice and no content", async () => {

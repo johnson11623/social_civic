@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { HomeView } from "@/routes/index";
+import { HomeView } from "@/components/home/HomeView";
 import { renderWithProviders } from "../render";
 
 describe("landing (T-W1.3.1.1)", () => {

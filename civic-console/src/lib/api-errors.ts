@@ -8,6 +8,8 @@ export type ApiFailure = {
 	readonly code?: string;
 	readonly detail?: string;
 	readonly retryAfter?: number;
+	/** ValidationFailed: which fields failed and why. */
+	readonly errors?: ReadonlyArray<{ readonly field: string; readonly code: string }>;
 };
 
 /**
@@ -51,7 +53,7 @@ export type Settled<A> =
 
 export function settle<A>(result: { _tag: "Right"; right: A } | { _tag: "Left"; left: unknown }): Settled<A> {
 	if (result._tag === "Right") return { ok: true, value: result.right };
-	const e = (result.left ?? {}) as Partial<ApiFailure> & { code?: string };
+	const e = (result.left ?? {}) as Partial<ApiFailure>;
 	return {
 		ok: false,
 		error: {
@@ -59,6 +61,7 @@ export function settle<A>(result: { _tag: "Right"; right: A } | { _tag: "Left"; 
 			...(e.detail !== undefined ? { detail: e.detail } : {}),
 			...(e.retryAfter !== undefined ? { retryAfter: e.retryAfter } : {}),
 			...(e.code !== undefined ? { code: e.code } : {}),
+			...(e.errors !== undefined ? { errors: e.errors.map(({ field, code }) => ({ field, code })) } : {}),
 		},
 	};
 }

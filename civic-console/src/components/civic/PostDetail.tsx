@@ -6,22 +6,13 @@ import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { describeError, type Settled, settle } from "@/lib/api-errors";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { fetchThread } from "@/lib/loaders";
 import { useLikeToggle } from "@/lib/use-like";
 import { callApiEither } from "@/runtimes/get-runtime";
+import { LazyWhyModal as WhyModal } from "./LazyWhyModal";
 import { PostCard } from "./PostCard";
 import { ReplyComposer } from "./ReplyComposer";
 import { ReplyThread } from "./ReplyThread";
-import { WhyModal } from "./WhyModal";
-
-export const THREAD_PAGE_SIZE = 50;
-
-export const fetchThread = (postId: string, cursor?: string) =>
-	callApiEither((api) =>
-		api.posts.replies({
-			path: { postId },
-			urlParams: { limit: THREAD_PAGE_SIZE, ...(cursor ? { cursor } : {}) },
-		}),
-	).then(settle);
 
 type Props = { post: Post; thread: Settled<ThreadPage> };
 

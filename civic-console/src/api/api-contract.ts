@@ -11,7 +11,7 @@
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "@effect/platform";
 import { Schema } from "effect";
 
-import { MAX_POST_LENGTH } from "@/lib/limits";
+import { MAX_CHANNEL_DESCRIPTION, MAX_POST_LENGTH } from "@/lib/limits";
 
 // ---- Errors (mirroring the Go API's RFC 7807 codes) -----------------------
 
@@ -302,13 +302,50 @@ export const Channel = Schema.Struct({
 	description: Schema.optionalWith(Schema.String, { exact: true }),
 	category: ChannelCategory,
 	readOnly: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("read_only")),
+	/** Whether the caller may post here (read-only channels: their creator). */
+	canPost: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("can_post")),
+	memberCount: Schema.optionalWith(Schema.Int, { exact: true }).pipe(Schema.fromKey("member_count")),
 });
 export type Channel = typeof Channel.Type;
+export type ChannelCategory = typeof ChannelCategory.Type;
+
+export const WardInfo = Schema.Struct({
+	wardId: Schema.propertySignature(Schema.Int).pipe(Schema.fromKey("ward_id")),
+	name: Schema.String,
+	constituency: Schema.String,
+	county: Schema.String,
+});
+export type WardInfo = typeof WardInfo.Type;
 
 export const ChannelList = Schema.Struct({
 	wardId: Schema.propertySignature(Schema.Int).pipe(Schema.fromKey("ward_id")),
+	ward: Schema.optionalWith(WardInfo, { exact: true }),
+	memberCount: Schema.optionalWith(Schema.Int, { exact: true }).pipe(Schema.fromKey("member_count")),
 	items: Schema.Array(Channel),
 });
+
+export const CreateChannelPayload = Schema.Struct({
+	name: Schema.String.pipe(Schema.maxLength(80)),
+	description: Schema.optionalWith(Schema.String.pipe(Schema.maxLength(MAX_CHANNEL_DESCRIPTION * 2)), {
+		exact: true,
+	}),
+	category: ChannelCategory,
+	readOnly: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("read_only")),
+});
+export type CreateChannelPayload = typeof CreateChannelPayload.Type;
+
+export const ChannelPostsParams = Schema.Struct({
+	cursor: Schema.optional(Schema.String.pipe(Schema.maxLength(512))),
+	limit: Schema.optional(Schema.NumberFromString.pipe(Schema.int(), Schema.between(1, 50))),
+});
+
+export const ChannelPostsPage = Schema.Struct({
+	channelId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("channel_id")),
+	items: Schema.Array(Post),
+	nextCursor: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("next_cursor")),
+	hasMore: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("has_more")),
+});
+export type ChannelPostsPage = typeof ChannelPostsPage.Type;
 export type ChannelList = typeof ChannelList.Type;
 
 export const LikeState = Schema.Struct({
@@ -350,6 +387,37 @@ export class PostsGroup extends HttpApiGroup.make("posts")
 		HttpApiEndpoint.get("channels", "/channels")
 			.addSuccess(ChannelList)
 			.addError(Unauthorized)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("createChannel", "/channels")
+			.setPayload(CreateChannelPayload)
+			.addSuccess(Channel, { status: 201 })
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.get("channel", "/channels/:channelId")
+			.setPath(Schema.Struct({ channelId: Schema.String }))
+			.addSuccess(Channel)
+			.addError(Unauthorized)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.get("channelPosts", "/channels/:channelId/posts")
+			.setPath(Schema.Struct({ channelId: Schema.String }))
+			.setUrlParams(ChannelPostsParams)
+			.addSuccess(ChannelPostsPage)
+			.addError(Unauthorized)
+			.addError(ValidationFailed)
 			.addError(RateLimited)
 			.addError(BackendUnavailable)
 			.addError(UpstreamError),

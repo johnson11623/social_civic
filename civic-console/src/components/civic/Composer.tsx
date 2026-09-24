@@ -36,7 +36,7 @@ function readLastChannel(): string | null {
 export function Composer({ channels, onSubmit }: Props) {
 	const { t } = useT();
 	const [mode, setMode] = useState<"closed" | "inline" | "modal">("closed");
-	const postable = channels.filter((c) => !c.readOnly);
+	const postable = channels.filter((c) => c.canPost);
 
 	if (postable.length === 0) {
 		return (

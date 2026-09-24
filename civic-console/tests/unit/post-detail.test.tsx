@@ -136,9 +136,9 @@ describe("replying (T-W1.4.3.3)", () => {
 			}),
 		);
 		await waitFor(() =>
-			expect(screen.getByText("I'll call the water office", { selector: "p" }).closest("article")).not.toHaveAttribute(
-				"aria-busy",
-			),
+			expect(
+				screen.getByText("I'll call the water office", { selector: "p" }).closest("article"),
+			).not.toHaveAttribute("aria-busy"),
 		);
 		// The post's reply count follows.
 		expect(screen.getAllByRole("article")[0]).toHaveTextContent("Replies 3");

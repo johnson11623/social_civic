@@ -15,6 +15,7 @@ import { Route as JoinRouteImport } from './routes/join'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedAccountRouteImport } from './routes/_authed/account'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
+import { Route as AuthedChannelsChannelIdRouteImport } from './routes/_authed/channels.$channelId'
 import { Route as AuthedPostsPostIdRouteImport } from './routes/_authed/posts.$postId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -46,6 +47,11 @@ const ApiSplatRoute = ApiSplatRouteImport.update({
   path: '/api/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedChannelsChannelIdRoute = AuthedChannelsChannelIdRouteImport.update({
+  id: '/channels/$channelId',
+  path: '/channels/$channelId',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedPostsPostIdRoute = AuthedPostsPostIdRouteImport.update({
   id: '/posts/$postId',
   path: '/posts/$postId',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/account': typeof AuthedAccountRoute
   '/api/$': typeof ApiSplatRoute
+  '/channels/$channelId': typeof AuthedChannelsChannelIdRoute
   '/posts/$postId': typeof AuthedPostsPostIdRoute
 }
 export interface FileRoutesByTo {
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/account': typeof AuthedAccountRoute
   '/api/$': typeof ApiSplatRoute
+  '/channels/$channelId': typeof AuthedChannelsChannelIdRoute
   '/posts/$postId': typeof AuthedPostsPostIdRoute
 }
 export interface FileRoutesById {
@@ -76,13 +84,28 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authed/account': typeof AuthedAccountRoute
   '/api/$': typeof ApiSplatRoute
+  '/_authed/channels/$channelId': typeof AuthedChannelsChannelIdRoute
   '/_authed/posts/$postId': typeof AuthedPostsPostIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/join' | '/login' | '/account' | '/api/$' | '/posts/$postId'
+  fullPaths:
+    | '/'
+    | '/join'
+    | '/login'
+    | '/account'
+    | '/api/$'
+    | '/channels/$channelId'
+    | '/posts/$postId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/join' | '/login' | '/account' | '/api/$' | '/posts/$postId'
+  to:
+    | '/'
+    | '/join'
+    | '/login'
+    | '/account'
+    | '/api/$'
+    | '/channels/$channelId'
+    | '/posts/$postId'
   id:
     | '__root__'
     | '/'
@@ -91,6 +114,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authed/account'
     | '/api/$'
+    | '/_authed/channels/$channelId'
     | '/_authed/posts/$postId'
   fileRoutesById: FileRoutesById
 }
@@ -146,6 +170,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/channels/$channelId': {
+      id: '/_authed/channels/$channelId'
+      path: '/channels/$channelId'
+      fullPath: '/channels/$channelId'
+      preLoaderRoute: typeof AuthedChannelsChannelIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/posts/$postId': {
       id: '/_authed/posts/$postId'
       path: '/posts/$postId'
@@ -158,11 +189,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthedRouteChildren {
   AuthedAccountRoute: typeof AuthedAccountRoute
+  AuthedChannelsChannelIdRoute: typeof AuthedChannelsChannelIdRoute
   AuthedPostsPostIdRoute: typeof AuthedPostsPostIdRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAccountRoute: AuthedAccountRoute,
+  AuthedChannelsChannelIdRoute: AuthedChannelsChannelIdRoute,
   AuthedPostsPostIdRoute: AuthedPostsPostIdRoute,
 }
 

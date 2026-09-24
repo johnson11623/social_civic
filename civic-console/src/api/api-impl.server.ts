@@ -11,7 +11,9 @@ import { Effect, Layer, Schema } from "effect";
 import {
 	ApiContract,
 	BoundaryTree,
+	Channel,
 	ChannelList,
+	ChannelPostsPage,
 	FeedPage,
 	Group,
 	LikeState,
@@ -230,6 +232,60 @@ const PostsLive = HttpApiBuilder.group(ApiContract, "posts", (handlers) =>
 				return yield* backend.get("/v1/channels", ChannelList, yield* authedContext);
 			}).pipe(
 				Effect.catchTags(narrowTo("Unauthorized", "RateLimited", "BackendUnavailable", "UpstreamError")),
+			),
+		)
+		.handle("createChannel", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post("/v1/channels", Channel, {
+					...(yield* authedContext),
+					body: {
+						name: payload.name,
+						description: payload.description ?? "",
+						category: payload.category,
+						read_only: payload.readOnly,
+					},
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo(
+						"Unauthorized",
+						"Conflict",
+						"ValidationFailed",
+						"RateLimited",
+						"BackendUnavailable",
+						"UpstreamError",
+					),
+				),
+			),
+		)
+		.handle("channel", ({ path }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get(
+					`/v1/channels/${encodeURIComponent(path.channelId)}`,
+					Channel,
+					yield* authedContext,
+				);
+			}).pipe(
+				Effect.catchTags(narrowTo("Unauthorized", "RateLimited", "BackendUnavailable", "UpstreamError")),
+			),
+		)
+		.handle("channelPosts", ({ path, urlParams }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get(
+					`/v1/channels/${encodeURIComponent(path.channelId)}/posts`,
+					ChannelPostsPage,
+					{
+						urlParams,
+						...(yield* authedContext),
+					},
+				);
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "ValidationFailed", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
 			),
 		)
 		.handle("createPost", ({ path, payload }) =>

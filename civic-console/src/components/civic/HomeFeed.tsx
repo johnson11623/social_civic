@@ -1,15 +1,16 @@
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import type { Channel, ChannelList, FeedPage, Level, Post } from "@/api/api-contract";
 import { useToast } from "@/components/ui/Toast";
 import { describeError, type Settled, settle } from "@/lib/api-errors";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { fetchFeed } from "@/lib/loaders";
 import { useLikeToggle } from "@/lib/use-like";
 import { callApiEither } from "@/runtimes/get-runtime";
 import { Composer } from "./Composer";
 import { Feed } from "./Feed";
+import { LazyWhyModal as WhyModal } from "./LazyWhyModal";
 import { LevelTabs, tabId } from "./LevelTabs";
-import { WhyModal } from "./WhyModal";
 
 export type HomeData = {
 	level: Level;
@@ -18,22 +19,17 @@ export type HomeData = {
 };
 
 type Props = HomeData & {
+	/** The level in the URL; following a level link elsewhere switches the tab. */
+	urlLevel?: Level | undefined;
 	/** Keep the URL in step with the selected tab (shareable, back button). */
 	onLevelChange?: (level: Level) => void;
 };
-
-export const FEED_PAGE_SIZE = 20;
-
-export const fetchFeed = (level: Level, cursor?: string) =>
-	callApiEither((api) =>
-		api.posts.feed({ urlParams: { level, limit: FEED_PAGE_SIZE, ...(cursor ? { cursor } : {}) } }),
-	).then(settle);
 
 /**
  * W1.4.1 — the signed-in home: level tabs, the composer, and the feed.
  * Owns the list so likes and new posts update one card at a time.
  */
-export function HomeFeed({ level: initialLevel, feed, channels, onLevelChange }: Props) {
+export function HomeFeed({ level: initialLevel, urlLevel, feed, channels, onLevelChange }: Props) {
 	const { t } = useT();
 	const toast = useToast();
 	const panelId = useId();
@@ -78,6 +74,15 @@ export function HomeFeed({ level: initialLevel, feed, channels, onLevelChange }:
 		onLevelChange?.(next);
 		void load(next);
 	};
+
+	// The sidebar's level links change the URL, not this component's state.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: follow the URL only
+	useEffect(() => {
+		if (urlLevel && urlLevel !== level) {
+			setLevel(urlLevel);
+			void load(urlLevel);
+		}
+	}, [urlLevel]);
 
 	const loadMore = async () => {
 		if (!cursor) return;

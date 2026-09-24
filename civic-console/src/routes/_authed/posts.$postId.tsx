@@ -1,8 +1,9 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 
-import { fetchThread, PostDetail } from "@/components/civic/PostDetail";
+import { PostDetail } from "@/components/civic/PostDetail";
 import { describeError, settle } from "@/lib/api-errors";
 import { useT } from "@/lib/i18n/I18nProvider";
+import { fetchThread } from "@/lib/loaders";
 import { callApiEither } from "@/runtimes/get-runtime";
 
 /** T-W1.4.3.1 — a post and its replies. A reply's link opens its thread. */
