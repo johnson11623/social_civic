@@ -54,5 +54,20 @@
   "membership.invalid_unit": "That ward, constituency or county doesn't exist.",
   "membership.not_in_group": "A moderator must live in the group they moderate.",
   "membership.user_not_found": "No active user with that id.",
-  "membership.invalid_term": "The term must end in the future."
+  "membership.invalid_term": "The term must end in the future.",
+  "moderation.invalid_reason": "Choose one of the listed harms: hate speech, incitement, privacy or child safety.",
+  "moderation.already_reported": "You've already reported this post.",
+  "moderation.details_too_long": "Keep the details to 500 characters.",
+  "moderation.invalid_action": "Unknown moderation action.",
+  "moderation.already_moderated": "The post is already in that state.",
+  "moderation.notes_too_long": "Keep the notes to 1000 characters.",
+  "moderation.action_not_found": "No such moderation action.",
+  "moderation.not_author": "Only the post's author can appeal.",
+  "moderation.outside_window": "The 14-day appeal window has closed.",
+  "moderation.not_appealable": "This action can't be appealed.",
+  "moderation.already_appealed": "This decision has already been appealed.",
+  "moderation.statement_invalid": "Explain your appeal in 1 to 2000 characters.",
+  "moderation.appeal_not_found": "No such appeal.",
+  "moderation.appeal_decided": "This appeal has already been decided.",
+  "moderation.invalid_decision": "Decide to uphold or overturn."
 }

@@ -54,5 +54,20 @@
   "membership.invalid_unit": "Wadi, eneo bunge au kaunti hiyo haipo.",
   "membership.not_in_group": "Msimamizi lazima aishi katika kikundi anachosimamia.",
   "membership.user_not_found": "Hakuna mtumiaji hai mwenye kitambulisho hicho.",
-  "membership.invalid_term": "Muhula lazima uishe siku zijazo."
+  "membership.invalid_term": "Muhula lazima uishe siku zijazo.",
+  "moderation.invalid_reason": "Chagua mojawapo ya madhara yaliyoorodheshwa: matamshi ya chuki, uchochezi, faragha au usalama wa watoto.",
+  "moderation.already_reported": "Tayari umeripoti chapisho hili.",
+  "moderation.details_too_long": "Maelezo yasizidi herufi 500.",
+  "moderation.invalid_action": "Hatua ya usimamizi haijulikani.",
+  "moderation.already_moderated": "Chapisho tayari liko katika hali hiyo.",
+  "moderation.notes_too_long": "Maelezo yasizidi herufi 1000.",
+  "moderation.action_not_found": "Hatua hiyo ya usimamizi haipo.",
+  "moderation.not_author": "Mwandishi wa chapisho pekee ndiye anaweza kukata rufaa.",
+  "moderation.outside_window": "Muda wa siku 14 wa kukata rufaa umekwisha.",
+  "moderation.not_appealable": "Hatua hii haiwezi kukatiwa rufaa.",
+  "moderation.already_appealed": "Uamuzi huu tayari umekatiwa rufaa.",
+  "moderation.statement_invalid": "Eleza rufaa yako kwa herufi 1 hadi 2000.",
+  "moderation.appeal_not_found": "Rufaa hiyo haipo.",
+  "moderation.appeal_decided": "Rufaa hii tayari imeamuliwa.",
+  "moderation.invalid_decision": "Amua kuthibitisha au kubatilisha."
 }

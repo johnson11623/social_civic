@@ -24,6 +24,20 @@ type AdminUnit struct {
 	UpdatedAt        time.Time
 }
 
+type Appeal struct {
+	ID            int64
+	PublicID      uuid.UUID
+	ActionID      int64
+	AppellantID   int64
+	Statement     string
+	State         int16
+	FiledAt       time.Time
+	DueAt         time.Time
+	DecidedAt     *time.Time
+	DecidedBy     pgtype.Int8
+	DecisionNotes pgtype.Text
+}
+
 type Channel struct {
 	ID          int64
 	PublicID    uuid.UUID
@@ -79,6 +93,23 @@ type ErasureStep struct {
 	Attempts  int32
 	LastError pgtype.Text
 	UpdatedAt time.Time
+}
+
+type ModerationAction struct {
+	ID            int64
+	PublicID      uuid.UUID
+	PostID        int64
+	PostPublicID  uuid.UUID
+	ActorID       int64
+	Action        string
+	ReasonCode    string
+	Notes         pgtype.Text
+	ScopeLevel    int16
+	PreviousState int16
+	NewState      int16
+	AppealDueAt   *time.Time
+	OverturnedAt  *time.Time
+	CreatedAt     time.Time
 }
 
 type OtpChallenge struct {
@@ -173,6 +204,19 @@ type RefreshToken struct {
 	RevokedAt    *time.Time
 	RevokeReason pgtype.Text
 	ReplacedBy   pgtype.UUID
+}
+
+type Report struct {
+	ID         int64
+	PublicID   uuid.UUID
+	PostID     int64
+	ReporterID int64
+	ReasonCode string
+	Details    pgtype.Text
+	PostLevel  int16
+	State      int16
+	CreatedAt  time.Time
+	ResolvedAt *time.Time
 }
 
 type Role struct {

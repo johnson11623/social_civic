@@ -48,3 +48,12 @@ sql:
         out: internal/membership/membershipdb
         sql_package: pgx/v5
         emit_interface: true
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/moderation.sql
+    gen:
+      go:
+        package: moderationdb
+        out: internal/moderation/moderationdb
+        sql_package: pgx/v5
+        emit_interface: true

@@ -11,6 +11,10 @@ const (
 	TopicPostCreated        = "post.created"
 	TopicInteraction        = "interaction.recorded"
 	TopicModeratorAppointed = "moderator.appointed"
+	TopicPostReported       = "post.reported"
+	TopicModerationAction   = "moderation.action_recorded"
+	TopicAppealFiled        = "appeal.filed"
+	TopicAppealResolved     = "appeal.resolved"
 )
 
 // AllTopics lists every topic the platform publishes to, for provisioning.
@@ -23,4 +27,8 @@ var AllTopics = []string{
 	TopicPostCreated,
 	TopicInteraction,
 	TopicModeratorAppointed,
+	TopicPostReported,
+	TopicModerationAction,
+	TopicAppealFiled,
+	TopicAppealResolved,
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/johnson11623/social_civic/internal/boundary"
 	"github.com/johnson11623/social_civic/internal/identity"
 	"github.com/johnson11623/social_civic/internal/membership"
+	"github.com/johnson11623/social_civic/internal/moderation"
 	"github.com/johnson11623/social_civic/internal/platform/authn"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
@@ -190,6 +191,7 @@ func run(logger *slog.Logger) error {
 	// T-2.1.3.7 — 60 likes and 20 replies a minute per user.
 	likeLimit, replyLimit := perUser("like", 60, time.Minute), perUser("reply", 20, time.Minute)
 	feedCache := post.RedisFeedCache{Client: rdb, Key: []byte(cfg.FeedKey)}
+	mod := &moderation.Handlers{Pool: pool, Posts: post.NewStore(pool), Members: roles, Cache: feedCache, Logger: logger, Now: time.Now}
 	posts := &post.PostHandlers{Store: post.NewStore(pool), Cache: feedCache, Logger: logger}
 	feed := &post.FeedHandlers{Store: post.NewStore(pool), Cache: feedCache, Logger: logger}
 
@@ -211,6 +213,8 @@ func run(logger *slog.Logger) error {
 	// require active consent (T-1.1.3.3).
 	r.With(requireAuth).Get("/v1/users/me/roles", roles.MyRoles)
 	r.With(requireAuth).Post("/v1/moderators", roles.Appoint)
+	// LLD §8 — 10 reports an hour per user.
+	r.With(requireAuth, requireConsent, perUser("report", 10, time.Hour)).Post("/v1/reports", mod.Report)
 	r.With(requireAuth).Get("/v1/channels", channels.List)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}", channels.Get)
 	r.With(requireAuth).Get("/v1/channels/{channel_id}/posts", channels.Posts)
