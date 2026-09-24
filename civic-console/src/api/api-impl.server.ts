@@ -16,11 +16,16 @@ import {
 	Channel,
 	ChannelList,
 	ChannelPostsPage,
+	ConsentWithdrawn,
+	ErasureRequested,
 	FeedPage,
 	Group,
 	History,
 	LikeState,
+	MfaEnrolment,
+	MfaStatus,
 	Post,
+	Profile,
 	Queue,
 	ReportFiled,
 	RoleList,
@@ -31,6 +36,7 @@ import {
 	UpstreamError,
 } from "@/api/api-contract";
 import { isLang, LANG_COOKIE } from "@/lib/i18n/lang";
+import { CONSENT_VERSION } from "@/lib/validation";
 import { Backend } from "@/services/backend.server";
 import {
 	ACCESS_COOKIE,
@@ -41,6 +47,7 @@ import {
 	REFRESH_COOKIE,
 	refreshTokens,
 	sessionFromAccessToken,
+	setAccessCookie,
 	setSessionCookies,
 } from "@/services/session.server";
 
@@ -470,6 +477,111 @@ const ModerationLive = HttpApiBuilder.group(ApiContract, "moderation", (handlers
 		),
 );
 
+const GoMfaToken = Schema.Struct({ access_token: Schema.String, expires_in: Schema.Int });
+
+/** Apply a stepped-up access token to the session and describe it. */
+const steppedUp = (token: typeof GoMfaToken.Type) =>
+	Effect.as(
+		setAccessCookie(token.access_token, token.expires_in),
+		sessionFromAccessToken(token.access_token, nowSeconds()),
+	);
+
+const AccountLive = HttpApiBuilder.group(ApiContract, "account", (handlers) =>
+	handlers
+		.handle("profile", () =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get("/v1/users/me", Profile, yield* authedContext);
+			}).pipe(Effect.catchTags(narrowTo("Unauthorized", "BackendUnavailable", "UpstreamError"))),
+		)
+		.handle("updateProfile", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.request("PATCH", "/v1/users/me", Profile, {
+					...(yield* authedContext),
+					body: {
+						...(payload.displayName !== undefined ? { display_name: payload.displayName } : {}),
+						...(payload.preferredLang !== undefined ? { preferred_lang: payload.preferredLang } : {}),
+					},
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "ValidationFailed", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("withdrawConsent", () =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post("/v1/users/me/consent/withdraw", ConsentWithdrawn, {
+					...(yield* authedContext),
+					body: { version: CONSENT_VERSION },
+				});
+			}).pipe(Effect.catchTags(narrowTo("Unauthorized", "Conflict", "BackendUnavailable", "UpstreamError"))),
+		)
+		// The platform ends every session of the account when erasure starts,
+		// so this browser's cookies go too.
+		.handle("requestErasure", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				const res = yield* backend.post("/v1/users/me/erasure", ErasureRequested, {
+					...(yield* authedContext),
+					body: { reason: payload.reason ?? "" },
+				});
+				yield* clearSessionCookies;
+				return res;
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "Conflict", "ValidationFailed", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("mfaStatus", () =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get("/v1/users/me/mfa", MfaStatus, yield* authedContext);
+			}).pipe(Effect.catchTags(narrowTo("Unauthorized", "BackendUnavailable", "UpstreamError"))),
+		)
+		.handle("mfaEnrol", () =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post("/v1/users/me/mfa/totp", MfaEnrolment, yield* authedContext);
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "Conflict", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("mfaActivate", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				const token = yield* backend.post("/v1/users/me/mfa/totp/verify", GoMfaToken, {
+					...(yield* authedContext),
+					body: { code: payload.code },
+				});
+				return yield* steppedUp(token);
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "Conflict", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("stepUp", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				const token = yield* backend.post("/v1/auth/mfa", GoMfaToken, {
+					...(yield* authedContext),
+					body: { code: payload.code },
+				});
+				return yield* steppedUp(token);
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "Conflict", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		),
+);
+
 /**
  * Keep the errors an endpoint declares; report any other platform error as
  * UpstreamError so the contract's error types stay exact.
@@ -508,5 +620,5 @@ function narrowTo<const K extends Tag>(...keep: K[]) {
 }
 
 export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(
-	Layer.provide([SystemLive, BoundaryLive, AuthLive, PostsLive, ModerationLive]),
+	Layer.provide([SystemLive, BoundaryLive, AuthLive, PostsLive, ModerationLive, AccountLive]),
 );

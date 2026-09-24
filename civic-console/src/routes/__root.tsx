@@ -4,6 +4,8 @@ import { lazy, type ReactNode, Suspense } from "react";
 import { SessionKeeper } from "@/components/auth/SessionKeeper";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { ToastProvider } from "@/components/ui/Toast";
+import { displayAttributes } from "@/lib/display";
+import { resolveDisplay } from "@/lib/display-resolve";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { translate } from "@/lib/i18n/messages";
 import { resolveLang } from "@/lib/i18n/resolve-lang";
@@ -15,7 +17,7 @@ const Devtools = import.meta.env.DEV ? lazy(() => import("@/components/dev/Devto
 
 export const Route = createRootRoute({
 	// Language for this render: cookie → Accept-Language → Kiswahili.
-	beforeLoad: () => ({ lang: resolveLang() }),
+	beforeLoad: () => ({ lang: resolveLang(), display: resolveDisplay() }),
 	head: ({ match }) => ({
 		meta: [
 			{ charSet: "utf-8" },
@@ -32,12 +34,12 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: ReactNode }) {
-	const { lang } = Route.useRouteContext();
+	const { lang, display } = Route.useRouteContext();
 	return (
 		// suppressHydrationWarning: browser extensions (e.g. Grammarly) add
 		// attributes to <html>/<body> before React hydrates. It only silences
 		// attribute mismatches on these two elements, never their children.
-		<html lang={lang} suppressHydrationWarning>
+		<html lang={lang} {...displayAttributes(display)} suppressHydrationWarning>
 			<head>
 				<HeadContent />
 			</head>

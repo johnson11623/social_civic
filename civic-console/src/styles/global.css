@@ -107,3 +107,23 @@
 		scroll-behavior: auto !important;
 	}
 }
+
+/* Explicit reduced motion from the account settings, whatever the OS says. */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+	animation-duration: 0.01ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: 0.01ms !important;
+	scroll-behavior: auto !important;
+}
+
+/* Large text (Web App Design §7: base 20px); layouts reflow on the tokens. */
+:root[data-text="large"] {
+	--text-display: clamp(32px, 5vw, 46px);
+	--text-h1: clamp(26px, 3.5vw, 30px);
+	--text-h2: 22px;
+	--text-body: 20px;
+	--text-small: 17px;
+	--text-micro: 15px;
+}

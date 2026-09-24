@@ -32,6 +32,7 @@ const Claims = Schema.Struct({
 	exp: Schema.Number,
 	typ: Schema.Literal("access"),
 	scope: Schema.Struct({ ward: Schema.Int, constituency: Schema.Int, county: Schema.Int }),
+	mfa: Schema.optional(Schema.Boolean),
 });
 
 const anonymous: Session = { authenticated: false };
@@ -45,7 +46,13 @@ export function sessionFromAccessToken(token: string | undefined, nowSeconds: nu
 		const json = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
 		const claims = Option.getOrUndefined(Schema.decodeUnknownOption(Claims)(json));
 		if (!claims || claims.exp <= nowSeconds) return anonymous;
-		return { authenticated: true, subject: claims.sub, scope: claims.scope, expiresAt: claims.exp };
+		return {
+			authenticated: true,
+			subject: claims.sub,
+			scope: claims.scope,
+			expiresAt: claims.exp,
+			...(claims.mfa ? { mfa: true } : {}),
+		};
 	} catch {
 		return anonymous;
 	}
@@ -86,6 +93,27 @@ export const setSessionCookies = (tokens: GoTokens) =>
 						maxAge: REFRESH_TTL,
 					}),
 				),
+			),
+		);
+	});
+
+/**
+ * Replace only the access cookie: a two-step verification step-up (F-08)
+ * gives a stronger access token for its 15 minutes; the refresh token and
+ * the rest of the session stay as they are.
+ */
+export const setAccessCookie = (accessToken: string, expiresIn: number) =>
+	Effect.gen(function* () {
+		const secure = yield* Effect.orDie(secureCookies);
+		yield* HttpApp.appendPreResponseHandler((_req, res) =>
+			Effect.succeed(
+				HttpServerResponse.unsafeSetCookie(res, ACCESS_COOKIE, accessToken, {
+					httpOnly: true,
+					secure,
+					sameSite: "lax",
+					path: "/",
+					maxAge: `${expiresIn} seconds`,
+				}),
 			),
 		);
 	});

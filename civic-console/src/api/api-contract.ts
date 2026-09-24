@@ -187,6 +187,8 @@ export const Session = Schema.Struct({
 	expiresAt: Schema.optionalWith(Schema.Int, { exact: true }),
 	/** True when this response rotated the tokens (the access token had expired). */
 	refreshed: Schema.optionalWith(Schema.Boolean, { exact: true }),
+	/** The access token was issued after a two-step verification code (F-08). */
+	mfa: Schema.optionalWith(Schema.Boolean, { exact: true }),
 });
 export type Session = typeof Session.Type;
 
@@ -646,6 +648,144 @@ export class ModerationGroup extends HttpApiGroup.make("moderation")
 			.addError(UpstreamError),
 	) {}
 
+// ---- Account (profile, settings, privacy, two-step verification) -----------------
+
+export const Profile = Schema.Struct({
+	publicId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("public_id")),
+	displayName: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("display_name")),
+	preferredLang: Schema.propertySignature(Schema.Literal("en", "sw")).pipe(Schema.fromKey("preferred_lang")),
+	memberSince: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("member_since")),
+	ward: Schema.optionalWith(WardInfo, { exact: true }),
+	consent: Schema.Struct({
+		version: Schema.String,
+		active: Schema.Boolean,
+		grantedAt: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("granted_at")),
+		withdrawnAt: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("withdrawn_at")),
+	}),
+	mfaEnabled: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("mfa_enabled")),
+	erasure: Schema.optionalWith(
+		Schema.Struct({
+			requestId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("request_id")),
+			state: Schema.Literal("pending", "failed"),
+			requestedAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("requested_at")),
+			completionBy: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("completion_by")),
+		}),
+		{ exact: true },
+	),
+});
+export type Profile = typeof Profile.Type;
+
+export const ProfileUpdate = Schema.Struct({
+	displayName: Schema.optionalWith(Schema.String.pipe(Schema.maxLength(200)), { exact: true }).pipe(
+		Schema.fromKey("display_name"),
+	),
+	preferredLang: Schema.optionalWith(Schema.Literal("en", "sw"), { exact: true }).pipe(
+		Schema.fromKey("preferred_lang"),
+	),
+});
+
+export const ConsentWithdrawn = Schema.Struct({
+	withdrawn: Schema.Boolean,
+	version: Schema.String,
+	effectiveAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("effective_at")),
+});
+
+export const ErasureRequested = Schema.Struct({
+	requestId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("request_id")),
+	state: Schema.String,
+	completionBy: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("completion_by")),
+	retained: Schema.Array(Schema.String),
+});
+
+export const MfaStatus = Schema.Struct({
+	enabled: Schema.Boolean,
+	steppedUp: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("stepped_up")),
+});
+
+export const MfaEnrolment = Schema.Struct({
+	secret: Schema.String,
+	otpauthUri: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("otpauth_uri")),
+});
+
+export const MfaCode = Schema.Struct({ code: Schema.String.pipe(Schema.pattern(/^\d{6}$/)) });
+
+export class AccountGroup extends HttpApiGroup.make("account")
+	.add(
+		HttpApiEndpoint.get("profile", "/me")
+			.addSuccess(Profile)
+			.addError(Unauthorized)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.patch("updateProfile", "/me")
+			.setPayload(ProfileUpdate)
+			.addSuccess(Profile)
+			.addError(Unauthorized)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("withdrawConsent", "/me/consent/withdraw")
+			.addSuccess(ConsentWithdrawn)
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("requestErasure", "/me/erasure")
+			.setPayload(
+				Schema.Struct({
+					reason: Schema.optionalWith(Schema.String.pipe(Schema.maxLength(1000)), { exact: true }),
+				}),
+			)
+			.addSuccess(ErasureRequested, { status: 202 })
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(ValidationFailed)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.get("mfaStatus", "/me/mfa")
+			.addSuccess(MfaStatus)
+			.addError(Unauthorized)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("mfaEnrol", "/me/mfa/totp")
+			.addSuccess(MfaEnrolment, { status: 201 })
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("mfaActivate", "/me/mfa/totp/verify")
+			.setPayload(MfaCode)
+			.addSuccess(Session)
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("stepUp", "/auth/mfa")
+			.setPayload(MfaCode)
+			.addSuccess(Session)
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	) {}
+
 // ---- Contract -----------------------------------------------------------------
 
 export class ApiContract extends HttpApi.make("civic")
@@ -654,4 +794,5 @@ export class ApiContract extends HttpApi.make("civic")
 	.add(AuthGroup)
 	.add(PostsGroup)
 	.add(ModerationGroup)
+	.add(AccountGroup)
 	.prefix("/api") {}
