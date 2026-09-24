@@ -1,0 +1,109 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/*
+ * Tailwind v4 theme from the design tokens (Atomic Design + Tailwind §2).
+ * `inline` keeps utilities pointing at the CSS variables, so dark mode and
+ * accessibility modes restyle everything without new classes.
+ *
+ * Spacing: Tailwind's default 4px scale already contains every token value
+ * (4, 8, 12, 16, 24, 32, 48, 64 → classes 1, 2, 3, 4, 6, 8, 12, 16), so it is
+ * kept as is; use only those steps. No arbitrary values (enforced by tests).
+ */
+@theme inline {
+	--color-*: initial;
+	--color-ink: var(--ink);
+	--color-paper: var(--paper);
+	--color-surface: var(--surface);
+	--color-surface-2: var(--surface-2);
+	--color-border: var(--border);
+	--color-muted: var(--muted);
+	--color-accent: var(--accent);
+	--color-accent-hover: var(--accent-hover);
+	--color-kenya-green: var(--kenya-green);
+	--color-kenya-red: var(--kenya-red);
+	--color-kenya-black: var(--kenya-black);
+	--color-warning: var(--warning);
+	--color-danger: var(--danger);
+	--color-sponsored: var(--sponsored);
+	--color-elevated: var(--elevated);
+	--color-verified: var(--verified);
+	--color-on-accent: var(--on-accent);
+	--color-transparent: transparent;
+	--color-current: currentColor;
+
+	--font-body: var(--font-body);
+	--font-mono: var(--font-mono);
+}
+
+@theme {
+	/* Type scale (Web App Design v2.0 §2.2, responsive via clamp) */
+	--text-display: clamp(28px, 4vw, 40px);
+	--text-display--line-height: 1.15;
+	--text-display--font-weight: 700;
+	--text-h1: clamp(22px, 3vw, 26px);
+	--text-h1--line-height: 1.25;
+	--text-h1--font-weight: 600;
+	--text-h2: 18px;
+	--text-h2--line-height: 1.3;
+	--text-h2--font-weight: 600;
+	--text-body: 16px;
+	--text-body--line-height: 1.5;
+	--text-small: 14px;
+	--text-small--line-height: 1.5;
+	--text-micro: 12px;
+	--text-micro--line-height: 1.4;
+	--text-micro--font-weight: 500;
+
+	/* Shape */
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 14px;
+	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06);
+	--shadow-md: 0 4px 12px rgb(0 0 0 / 0.08);
+	--shadow-lg: 0 12px 24px rgb(0 0 0 / 0.12);
+
+	/* Breakpoints (Web App Design v2.0 §4.1) */
+	--breakpoint-xs: 320px;
+	--breakpoint-sm: 480px;
+	--breakpoint-md: 640px;
+	--breakpoint-lg: 768px;
+	--breakpoint-xl: 1024px;
+	--breakpoint-2xl: 1280px;
+
+	/* Motion */
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@layer base {
+	html {
+		font-family: var(--font-body);
+		color: var(--ink);
+		background: var(--paper);
+		-webkit-text-size-adjust: 100%;
+	}
+
+	body {
+		margin: 0;
+		min-height: 100dvh;
+		font-size: var(--text-body);
+		line-height: 1.5;
+	}
+
+	:focus-visible {
+		outline: 3px solid var(--accent);
+		outline-offset: 2px;
+	}
+}
+
+/* Calm, not addictive: honour reduced motion everywhere (§2.6). */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

@@ -1,0 +1,61 @@
+# T-W1.1.1.10 — web app CI: lint, typecheck, unit tests, build, e2e.
+name: civic-console
+
+on:
+  pull_request:
+    paths: ["civic-console/**", ".github/workflows/civic-console.yml"]
+  push:
+    branches: [main]
+    paths: ["civic-console/**", ".github/workflows/civic-console.yml"]
+
+concurrency:
+  group: civic-console-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: civic-console
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: civic-console/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec biome ci
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: civic-console/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: civic-console/playwright-report
+          retention-days: 7

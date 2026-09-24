@@ -1,0 +1,76 @@
+/*
+ * Design tokens — Web App Design v2.0 §10 (LinkedIn × Discord hybrid).
+ * Raw values live here as CSS custom properties so dark mode, high contrast
+ * and large text can swap them at runtime. global.css maps them into
+ * Tailwind's theme; components use only the resulting utilities.
+ */
+:root {
+	/* Colour */
+	--ink: #0f1419;
+	--paper: #ffffff;
+	--surface: #f4f6f8;
+	--surface-2: #e9edf0;
+	--border: #d9dee3;
+	--muted: #5b6670;
+	--accent: #0a66c2;
+	--accent-hover: #004182;
+	--kenya-green: #006b3f;
+	--kenya-red: #b30000;
+	--kenya-black: #111111;
+	--warning: #b36b00;
+	--danger: #b30000;
+	--sponsored: #f0e9d8;
+	--elevated: #e6f0eb;
+	--verified: #0a66c2;
+	--on-accent: #ffffff;
+
+	/* Type — system fonts first: no blocking web fonts on 3G (§12) */
+	--font-body: "Inter", "Noto Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* Motion (§2.6) */
+	--duration-micro: 120ms;
+	--duration-transition: 200ms;
+	--duration-modal: 320ms;
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--ink: #e9edf0;
+		--paper: #0f1419;
+		--surface: #161b22;
+		--surface-2: #1f242c;
+		--border: #2a3038;
+		--muted: #8b949e;
+		--accent: #4493f8;
+		--accent-hover: #6cb0ff;
+		--kenya-green: #3fb27f;
+		--kenya-red: #f47067;
+		--warning: #d29922;
+		--danger: #f47067;
+		--sponsored: #2e2a1f;
+		--elevated: #15261e;
+		--verified: #4493f8;
+		--on-accent: #0f1419;
+	}
+}
+
+:root[data-theme="dark"] {
+	--ink: #e9edf0;
+	--paper: #0f1419;
+	--surface: #161b22;
+	--surface-2: #1f242c;
+	--border: #2a3038;
+	--muted: #8b949e;
+	--accent: #4493f8;
+	--accent-hover: #6cb0ff;
+	--kenya-green: #3fb27f;
+	--kenya-red: #f47067;
+	--warning: #d29922;
+	--danger: #f47067;
+	--sponsored: #2e2a1f;
+	--elevated: #15261e;
+	--verified: #4493f8;
+	--on-accent: #0f1419;
+}
