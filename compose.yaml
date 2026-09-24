@@ -69,6 +69,44 @@ services:
       timeout: 3s
       retries: 30
 
+  # ---- Media (docs/media): `make media-up` -----------------------------------
+  # S3-compatible object storage (SeaweedFS stands in for MinIO, whose images
+  # are no longer published). S3 API on localhost:${S3_PORT:-19000}.
+  # Buckets: civic-originals (private; signed URLs only) and civic-media
+  # (processed variants, public-read for the CDN) — see infra/seaweedfs/s3.json.
+  seaweedfs:
+    profiles: ["media"]
+    image: chrislusf/seaweedfs:3.80
+    command:
+      - server
+      - -dir=/data
+      - -s3
+      - -s3.port=8333
+      - -s3.config=/etc/seaweedfs/s3.json
+      - -volume.max=20
+      - -master.volumeSizeLimitMB=256
+    ports:
+      - "127.0.0.1:${S3_PORT:-19000}:8333"
+    volumes:
+      - seaweeddata:/data
+      - ./infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/ || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Local CDN for processed media: localhost:${MEDIA_CDN_PORT:-18080}/media/variants/…
+  caddy:
+    profiles: ["media"]
+    image: caddy:2.9-alpine
+    ports:
+      - "127.0.0.1:${MEDIA_CDN_PORT:-18080}:8080"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - seaweedfs
+
   # golang-migrate CLI, so nobody needs it installed locally.
   migrate:
     profiles: ["tools"]
@@ -78,3 +116,4 @@ services:
 
 volumes:
   pgdata:
+  seaweeddata:

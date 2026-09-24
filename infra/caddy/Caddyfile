@@ -1,0 +1,43 @@
+# Local media CDN (docs/media §4, T-LOCAL-03): serves processed variants
+# from object storage (SeaweedFS) with production cache headers. Originals
+# live in another, private bucket and are never served.
+{
+	auto_https off
+	admin off
+}
+
+:8080 {
+	handle /health {
+		respond "OK" 200
+	}
+
+	handle /media/variants/* {
+		uri replace /media/variants/ /civic-media/
+		reverse_proxy seaweedfs:8333 {
+			header_up Host seaweedfs:8333
+			header_down -Server
+			header_down -X-Amz-Request-Id
+			header_down -X-Amz-Id-2
+		}
+		header {
+			Cache-Control "public, max-age=31536000, immutable"
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "no-referrer"
+			Access-Control-Allow-Origin "*"
+			Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+			Access-Control-Allow-Headers "Range"
+			Access-Control-Expose-Headers "Content-Length, Content-Range, Accept-Ranges"
+			-Server
+		}
+		encode zstd gzip
+	}
+
+	handle {
+		respond 404
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

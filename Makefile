@@ -10,7 +10,10 @@ POSTGRES_PORT      ?= 5433
 POSTGRES_TEST_PORT ?= 55433
 KAFKA_PORT         ?= 19092
 REDIS_PORT         ?= 16379
-export POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT POSTGRES_TEST_PORT KAFKA_PORT REDIS_PORT
+S3_PORT            ?= 19000
+MEDIA_CDN_PORT     ?= 18080
+export POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT POSTGRES_TEST_PORT KAFKA_PORT REDIS_PORT \
+       S3_PORT MEDIA_CDN_PORT
 
 COMPOSE := docker compose
 
@@ -32,7 +35,7 @@ N ?= 1
 .PHONY: help db-up db-down db-reset db-logs db-ps db-psql db-url \
         migrate-up migrate-down migrate-down-all migrate-version migrate-force migrate-create \
         test-db test-db-up test-db-run test-db-down test-db-psql \
-        db-seed admin-grant run-api run-worker kafka-up redis-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
+        db-seed admin-grant media-up media-down media-reset run-api run-worker kafka-up redis-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
 
 # Development-only secrets for run-api. Production uses KMS/Vault (T-X.4).
 DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
@@ -137,6 +140,19 @@ run-api: db-up migrate-up db-seed redis-up ## Run the API against the dev databa
 
 redis-up: ## Start Redis (cache, rate limits) on localhost:$(REDIS_PORT)
 	$(COMPOSE) up -d --wait redis
+
+media-up: ## Start media storage (SeaweedFS S3) and the local CDN (Caddy); the API creates the buckets
+	$(COMPOSE) --profile media up -d --wait seaweedfs caddy
+	@echo "S3 API    http://localhost:$(S3_PORT)  (civicdev / civicdev-secret-change-me)"
+	@echo "Media CDN http://localhost:$(MEDIA_CDN_PORT)/media/variants/…"
+
+media-down: ## Stop media services (stored media is kept)
+	$(COMPOSE) --profile media stop seaweedfs caddy
+
+media-reset: ## DESTRUCTIVE: delete all stored media
+	$(COMPOSE) --profile media rm -sf seaweedfs caddy
+	docker volume rm -f civic_seaweeddata
+	$(MAKE) media-up
 
 kafka-up: ## Start the dev event bus (Redpanda, Kafka API on localhost:$(KAFKA_PORT))
 	$(COMPOSE) up -d --wait redpanda
