@@ -181,6 +181,8 @@ func run(logger *slog.Logger) error {
 	channelLimit := perUser("channel", 5, time.Hour)
 	// T-2.1.2.4 — 10 posts a minute and 100 a day per user.
 	postMinute, postDay := perUser("post-min", 10, time.Minute), perUser("post-day", 100, 24*time.Hour)
+	// T-2.1.3.7 — 60 likes and 20 replies a minute per user.
+	likeLimit, replyLimit := perUser("like", 60, time.Minute), perUser("reply", 20, time.Minute)
 	posts := &post.PostHandlers{Store: post.NewStore(pool), Cache: post.RedisFeedCache{Client: rdb}, Logger: logger}
 
 	r := chi.NewRouter()
@@ -204,6 +206,10 @@ func run(logger *slog.Logger) error {
 	r.With(requireAuth, requireConsent, channelLimit).Post("/v1/channels", channels.Create)
 	r.With(requireAuth, requireConsent, postMinute, postDay).Post("/v1/channels/{channel_id}/posts", posts.Create)
 	r.With(requireAuth).Get("/v1/posts/{post_id}", posts.Get)
+	r.With(requireAuth).Get("/v1/posts/{post_id}/replies", posts.Replies)
+	r.With(requireAuth, requireConsent, likeLimit).Post("/v1/posts/{post_id}/likes", posts.Like)
+	r.With(requireAuth, requireConsent, likeLimit).Delete("/v1/posts/{post_id}/likes", posts.Unlike)
+	r.With(requireAuth, requireConsent, replyLimit).Post("/v1/posts/{post_id}/replies", posts.Reply)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

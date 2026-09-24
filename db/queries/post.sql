@@ -36,9 +36,60 @@ RETURNING id, created_at;
 
 -- name: GetPostByPublicID :one
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.constituency_id, p.county_id, p.score,
-       p.state, p.created_at, c.public_id AS channel_public_id, c.name AS channel_name,
-       u.public_id AS author_public_id, u.display_name AS author_display_name
+       p.state, p.created_at, p.channel_id, p.root_id, p.parent_id,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
 WHERE p.public_id = $1;
+
+-- name: GetPostPublicIDByID :one
+SELECT public_id FROM posts WHERE id = $1;
+
+-- name: HasLiked :one
+SELECT EXISTS (SELECT 1 FROM post_likes WHERE post_id = $1 AND user_id = $2) AS liked;
+
+-- name: InsertLike :execrows
+INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;
+
+-- name: DeleteLike :execrows
+DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2;
+
+-- name: InsertActor :execrows
+INSERT INTO post_actors (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;
+
+-- name: AddToCounters :one
+-- Deltas are applied atomically; the row is created on first interaction.
+INSERT INTO post_counters (post_id, like_count, reply_count, unique_actors, last_interaction_at)
+VALUES (sqlc.arg(post_id), GREATEST(sqlc.arg(likes)::int, 0), GREATEST(sqlc.arg(replies)::int, 0), GREATEST(sqlc.arg(actors)::int, 0), now())
+ON CONFLICT (post_id) DO UPDATE SET
+    like_count          = post_counters.like_count + sqlc.arg(likes)::int,
+    reply_count         = post_counters.reply_count + sqlc.arg(replies)::int,
+    unique_actors       = post_counters.unique_actors + sqlc.arg(actors)::int,
+    last_interaction_at = now(),
+    updated_at          = now()
+RETURNING like_count, reply_count;
+
+-- name: InsertReply :one
+INSERT INTO posts (public_id, channel_id, author_id, content, level, ward_id, constituency_id, county_id, root_id, parent_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, created_at;
+
+-- name: ListThread :many
+-- Replies of a thread in conversation order, keyset-paginated.
+SELECT p.id, p.public_id, p.content, p.state, p.created_at, p.parent_id,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.root_id = sqlc.arg(root_id) AND p.state <> 4
+  AND (p.created_at, p.id) > (sqlc.arg(after_time)::timestamptz, sqlc.arg(after_id)::bigint)
+ORDER BY p.created_at, p.id
+LIMIT sqlc.arg(max_rows);
+
+-- name: PublicIDsByIDs :many
+SELECT id, public_id FROM posts WHERE id = ANY(sqlc.arg(ids)::bigint[]);

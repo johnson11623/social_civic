@@ -9,6 +9,7 @@ const (
 	TopicUserErased       = "user.erased"
 	TopicChannelCreated   = "channel.created"
 	TopicPostCreated      = "post.created"
+	TopicInteraction      = "interaction.recorded"
 )
 
 // AllTopics lists every topic the platform publishes to, for provisioning.
@@ -19,4 +20,5 @@ var AllTopics = []string{
 	TopicUserErased,
 	TopicChannelCreated,
 	TopicPostCreated,
+	TopicInteraction,
 }

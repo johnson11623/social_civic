@@ -44,5 +44,8 @@
   "post.media_not_supported": "Picha na video bado hazitumiki.",
   "post.read_only_channel": "Wasimamizi pekee wanaweza kuchapisha katika kituo hiki.",
   "post.not_found": "Chapisho hili halipo.",
-  "post.out_of_scope": "Chapisho hili halionekani katika eneo lako."
+  "post.out_of_scope": "Chapisho hili halionekani katika eneo lako.",
+  "post.already_liked": "Tayari umependa chapisho hili.",
+  "post.like_not_found": "Hujapenda chapisho hili.",
+  "post.not_active": "Chapisho hili haliwezi kupendwa wala kujibiwa kwa sasa."
 }

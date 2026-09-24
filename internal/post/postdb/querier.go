@@ -11,16 +11,27 @@ import (
 )
 
 type Querier interface {
+	// Deltas are applied atomically; the row is created on first interaction.
+	AddToCounters(ctx context.Context, arg AddToCountersParams) (AddToCountersRow, error)
 	CountActiveWardMembers(ctx context.Context, wardID int32) (int32, error)
+	DeleteLike(ctx context.Context, arg DeleteLikeParams) (int64, error)
 	// One platform-owned #general channel per ward; idempotent.
 	EnsureGeneralChannels(ctx context.Context) (int64, error)
 	GetActiveUserByPublicID(ctx context.Context, publicID uuid.UUID) (GetActiveUserByPublicIDRow, error)
 	GetChannelByPublicID(ctx context.Context, publicID uuid.UUID) (GetChannelByPublicIDRow, error)
 	GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (GetPostByPublicIDRow, error)
+	GetPostPublicIDByID(ctx context.Context, id int64) (uuid.UUID, error)
+	HasLiked(ctx context.Context, arg HasLikedParams) (bool, error)
+	InsertActor(ctx context.Context, arg InsertActorParams) (int64, error)
 	InsertChannel(ctx context.Context, arg InsertChannelParams) (InsertChannelRow, error)
+	InsertLike(ctx context.Context, arg InsertLikeParams) (int64, error)
 	InsertPost(ctx context.Context, arg InsertPostParams) (InsertPostRow, error)
+	InsertReply(ctx context.Context, arg InsertReplyParams) (InsertReplyRow, error)
+	// Replies of a thread in conversation order, keyset-paginated.
+	ListThread(ctx context.Context, arg ListThreadParams) ([]ListThreadRow, error)
 	// #general first, then by name.
 	ListWardChannels(ctx context.Context, wardID int32) ([]ListWardChannelsRow, error)
+	PublicIDsByIDs(ctx context.Context, ids []int64) ([]PublicIDsByIDsRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

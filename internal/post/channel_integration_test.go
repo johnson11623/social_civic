@@ -49,7 +49,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 			t.Fatal(err)
 		}
 	})
-	if _, err := pool.Exec(ctx, "TRUNCATE users, consents, channels, posts, outbox RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE users, consents, channels, posts, post_likes, post_actors, post_counters, outbox RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("reset (is the database migrated?): %v", err)
 	}
 	return pool
@@ -94,6 +94,10 @@ func newEnv(t *testing.T) *env {
 	r.With(requireAuth, requireConsent).Post("/v1/channels", h.Create)
 	r.With(requireAuth, requireConsent).Post("/v1/channels/{channel_id}/posts", ph.Create)
 	r.With(requireAuth).Get("/v1/posts/{post_id}", ph.Get)
+	r.With(requireAuth).Get("/v1/posts/{post_id}/replies", ph.Replies)
+	r.With(requireAuth, requireConsent).Post("/v1/posts/{post_id}/likes", ph.Like)
+	r.With(requireAuth, requireConsent).Delete("/v1/posts/{post_id}/likes", ph.Unlike)
+	r.With(requireAuth, requireConsent).Post("/v1/posts/{post_id}/replies", ph.Reply)
 	return &env{pool: pool, router: r, tokens: tokens, cache: cache}
 }
 

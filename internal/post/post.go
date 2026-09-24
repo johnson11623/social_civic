@@ -55,6 +55,15 @@ type Post struct {
 	Score          float32
 	State          int16
 	CreatedAt      time.Time
+
+	ChannelRowID int64
+	RootID       int64 // 0 for top-level posts
+	ParentID     int64
+	ParentPublic uuid.UUID
+	RootPublic   uuid.UUID
+	Likes        int
+	Replies      int
+	Liked        *bool // for the caller, when known
 }
 
 // PostCreatedData is the payload of post.created. Content is left out: events
@@ -117,12 +126,24 @@ func (s *Store) PostByPublicID(ctx context.Context, id uuid.UUID) (Post, error) 
 	if err != nil {
 		return Post{}, err
 	}
-	return Post{
+	p := Post{
 		ID: r.ID, PublicID: r.PublicID, ChannelID: r.ChannelPublicID, ChannelName: r.ChannelName,
 		AuthorID: r.AuthorPublicID, AuthorName: r.AuthorDisplayName, Content: r.Content.String,
 		Level: r.Level, WardID: r.WardID, ConstituencyID: r.ConstituencyID, CountyID: r.CountyID,
 		Score: r.Score, State: r.State, CreatedAt: r.CreatedAt,
-	}, nil
+		ChannelRowID: r.ChannelID, RootID: r.RootID.Int64, ParentID: r.ParentID.Int64,
+		Likes: int(r.LikeCount), Replies: int(r.ReplyCount),
+	}
+	q := postdb.New(s.pool)
+	if p.RootID != 0 {
+		if p.RootPublic, err = q.GetPostPublicIDByID(ctx, p.RootID); err != nil {
+			return Post{}, err
+		}
+		if p.ParentPublic, err = q.GetPostPublicIDByID(ctx, p.ParentID); err != nil {
+			return Post{}, err
+		}
+	}
+	return p, nil
 }
 
 // ---- Feed cache versions (T-2.1.2.6) ----------------------------------------------
@@ -159,6 +180,9 @@ type PostJSON struct {
 	State     string     `json:"state"`
 	Author    *AuthorRef `json:"author,omitempty"`
 	Counts    Counts     `json:"counts"`
+	Liked     *bool      `json:"liked,omitempty"`
+	RootID    string     `json:"root_id,omitempty"`   // replies: the thread's top-level post
+	ParentID  string     `json:"parent_id,omitempty"` // replies: the post or reply answered
 	CreatedAt time.Time  `json:"created_at"`
 }
 
@@ -180,6 +204,10 @@ func postJSON(p Post) PostJSON {
 	out := PostJSON{
 		PostID: p.PublicID.String(), ChannelID: p.ChannelID.String(), Channel: p.ChannelName, Level: p.Level,
 		WardID: p.WardID, Score: p.Score, State: stateNames[p.State], CreatedAt: p.CreatedAt,
+		Counts: Counts{Likes: p.Likes, Replies: p.Replies}, Liked: p.Liked,
+	}
+	if p.RootID != 0 {
+		out.RootID, out.ParentID = p.RootPublic.String(), p.ParentPublic.String()
 	}
 	if p.State == StateActive || p.State == StateFrozen {
 		content := p.Content
@@ -307,6 +335,12 @@ func (h *PostHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, r, http.StatusForbidden, "out_of_scope", i18n.MsgOutOfScope)
 		return
 	}
+	liked, err := h.Store.HasLiked(r.Context(), p.ID, user.ID)
+	if err != nil {
+		internal(w, r, h.Logger, "liked", err)
+		return
+	}
+	p.Liked = &liked
 	httpjson.Write(w, http.StatusOK, postJSON(p))
 }
 

@@ -120,6 +120,28 @@ type Post struct {
 	State          int16
 	CreatedAt      time.Time
 	DeletedAt      *time.Time
+	RootID         pgtype.Int8
+	ParentID       pgtype.Int8
+}
+
+type PostActor struct {
+	PostID int64
+	UserID int64
+}
+
+type PostCounter struct {
+	PostID            int64
+	LikeCount         int32
+	ReplyCount        int32
+	UniqueActors      int32
+	LastInteractionAt *time.Time
+	UpdatedAt         time.Time
+}
+
+type PostLike struct {
+	PostID    int64
+	UserID    int64
+	CreatedAt time.Time
 }
 
 type PostsDefault struct {

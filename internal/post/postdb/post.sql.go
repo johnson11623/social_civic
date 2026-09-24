@@ -13,6 +13,43 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addToCounters = `-- name: AddToCounters :one
+INSERT INTO post_counters (post_id, like_count, reply_count, unique_actors, last_interaction_at)
+VALUES ($1, GREATEST($2::int, 0), GREATEST($3::int, 0), GREATEST($4::int, 0), now())
+ON CONFLICT (post_id) DO UPDATE SET
+    like_count          = post_counters.like_count + $2::int,
+    reply_count         = post_counters.reply_count + $3::int,
+    unique_actors       = post_counters.unique_actors + $4::int,
+    last_interaction_at = now(),
+    updated_at          = now()
+RETURNING like_count, reply_count
+`
+
+type AddToCountersParams struct {
+	PostID  int64
+	Likes   int32
+	Replies int32
+	Actors  int32
+}
+
+type AddToCountersRow struct {
+	LikeCount  int32
+	ReplyCount int32
+}
+
+// Deltas are applied atomically; the row is created on first interaction.
+func (q *Queries) AddToCounters(ctx context.Context, arg AddToCountersParams) (AddToCountersRow, error) {
+	row := q.db.QueryRow(ctx, addToCounters,
+		arg.PostID,
+		arg.Likes,
+		arg.Replies,
+		arg.Actors,
+	)
+	var i AddToCountersRow
+	err := row.Scan(&i.LikeCount, &i.ReplyCount)
+	return i, err
+}
+
 const countActiveWardMembers = `-- name: CountActiveWardMembers :one
 SELECT count(*)::int FROM users WHERE ward_id = $1 AND state = 1
 `
@@ -22,6 +59,23 @@ func (q *Queries) CountActiveWardMembers(ctx context.Context, wardID int32) (int
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const deleteLike = `-- name: DeleteLike :execrows
+DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2
+`
+
+type DeleteLikeParams struct {
+	PostID int64
+	UserID int64
+}
+
+func (q *Queries) DeleteLike(ctx context.Context, arg DeleteLikeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteLike, arg.PostID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const ensureGeneralChannels = `-- name: EnsureGeneralChannels :execrows
@@ -101,11 +155,14 @@ func (q *Queries) GetChannelByPublicID(ctx context.Context, publicID uuid.UUID) 
 
 const getPostByPublicID = `-- name: GetPostByPublicID :one
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.constituency_id, p.county_id, p.score,
-       p.state, p.created_at, c.public_id AS channel_public_id, c.name AS channel_name,
-       u.public_id AS author_public_id, u.display_name AS author_display_name
+       p.state, p.created_at, p.channel_id, p.root_id, p.parent_id,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
 WHERE p.public_id = $1
 `
 
@@ -120,10 +177,15 @@ type GetPostByPublicIDRow struct {
 	Score             float32
 	State             int16
 	CreatedAt         time.Time
+	ChannelID         int64
+	RootID            pgtype.Int8
+	ParentID          pgtype.Int8
 	ChannelPublicID   uuid.UUID
 	ChannelName       string
 	AuthorPublicID    uuid.UUID
 	AuthorDisplayName string
+	LikeCount         int32
+	ReplyCount        int32
 }
 
 func (q *Queries) GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (GetPostByPublicIDRow, error) {
@@ -140,12 +202,61 @@ func (q *Queries) GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (Ge
 		&i.Score,
 		&i.State,
 		&i.CreatedAt,
+		&i.ChannelID,
+		&i.RootID,
+		&i.ParentID,
 		&i.ChannelPublicID,
 		&i.ChannelName,
 		&i.AuthorPublicID,
 		&i.AuthorDisplayName,
+		&i.LikeCount,
+		&i.ReplyCount,
 	)
 	return i, err
+}
+
+const getPostPublicIDByID = `-- name: GetPostPublicIDByID :one
+SELECT public_id FROM posts WHERE id = $1
+`
+
+func (q *Queries) GetPostPublicIDByID(ctx context.Context, id int64) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getPostPublicIDByID, id)
+	var public_id uuid.UUID
+	err := row.Scan(&public_id)
+	return public_id, err
+}
+
+const hasLiked = `-- name: HasLiked :one
+SELECT EXISTS (SELECT 1 FROM post_likes WHERE post_id = $1 AND user_id = $2) AS liked
+`
+
+type HasLikedParams struct {
+	PostID int64
+	UserID int64
+}
+
+func (q *Queries) HasLiked(ctx context.Context, arg HasLikedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasLiked, arg.PostID, arg.UserID)
+	var liked bool
+	err := row.Scan(&liked)
+	return liked, err
+}
+
+const insertActor = `-- name: InsertActor :execrows
+INSERT INTO post_actors (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING
+`
+
+type InsertActorParams struct {
+	PostID int64
+	UserID int64
+}
+
+func (q *Queries) InsertActor(ctx context.Context, arg InsertActorParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertActor, arg.PostID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertChannel = `-- name: InsertChannel :one
@@ -180,6 +291,23 @@ func (q *Queries) InsertChannel(ctx context.Context, arg InsertChannelParams) (I
 	var i InsertChannelRow
 	err := row.Scan(&i.ID, &i.CreatedAt)
 	return i, err
+}
+
+const insertLike = `-- name: InsertLike :execrows
+INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING
+`
+
+type InsertLikeParams struct {
+	PostID int64
+	UserID int64
+}
+
+func (q *Queries) InsertLike(ctx context.Context, arg InsertLikeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertLike, arg.PostID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertPost = `-- name: InsertPost :one
@@ -218,6 +346,118 @@ func (q *Queries) InsertPost(ctx context.Context, arg InsertPostParams) (InsertP
 	return i, err
 }
 
+const insertReply = `-- name: InsertReply :one
+INSERT INTO posts (public_id, channel_id, author_id, content, level, ward_id, constituency_id, county_id, root_id, parent_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, created_at
+`
+
+type InsertReplyParams struct {
+	PublicID       uuid.UUID
+	ChannelID      int64
+	AuthorID       int64
+	Content        pgtype.Text
+	Level          int16
+	WardID         int32
+	ConstituencyID int32
+	CountyID       int32
+	RootID         pgtype.Int8
+	ParentID       pgtype.Int8
+}
+
+type InsertReplyRow struct {
+	ID        int64
+	CreatedAt time.Time
+}
+
+func (q *Queries) InsertReply(ctx context.Context, arg InsertReplyParams) (InsertReplyRow, error) {
+	row := q.db.QueryRow(ctx, insertReply,
+		arg.PublicID,
+		arg.ChannelID,
+		arg.AuthorID,
+		arg.Content,
+		arg.Level,
+		arg.WardID,
+		arg.ConstituencyID,
+		arg.CountyID,
+		arg.RootID,
+		arg.ParentID,
+	)
+	var i InsertReplyRow
+	err := row.Scan(&i.ID, &i.CreatedAt)
+	return i, err
+}
+
+const listThread = `-- name: ListThread :many
+SELECT p.id, p.public_id, p.content, p.state, p.created_at, p.parent_id,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.root_id = $1 AND p.state <> 4
+  AND (p.created_at, p.id) > ($2::timestamptz, $3::bigint)
+ORDER BY p.created_at, p.id
+LIMIT $4
+`
+
+type ListThreadParams struct {
+	RootID    pgtype.Int8
+	AfterTime time.Time
+	AfterID   int64
+	MaxRows   int32
+}
+
+type ListThreadRow struct {
+	ID                int64
+	PublicID          uuid.UUID
+	Content           pgtype.Text
+	State             int16
+	CreatedAt         time.Time
+	ParentID          pgtype.Int8
+	AuthorPublicID    uuid.UUID
+	AuthorDisplayName string
+	LikeCount         int32
+	ReplyCount        int32
+}
+
+// Replies of a thread in conversation order, keyset-paginated.
+func (q *Queries) ListThread(ctx context.Context, arg ListThreadParams) ([]ListThreadRow, error) {
+	rows, err := q.db.Query(ctx, listThread,
+		arg.RootID,
+		arg.AfterTime,
+		arg.AfterID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListThreadRow
+	for rows.Next() {
+		var i ListThreadRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublicID,
+			&i.Content,
+			&i.State,
+			&i.CreatedAt,
+			&i.ParentID,
+			&i.AuthorPublicID,
+			&i.AuthorDisplayName,
+			&i.LikeCount,
+			&i.ReplyCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWardChannels = `-- name: ListWardChannels :many
 SELECT public_id, ward_id, name, description, category, read_only, created_at
 FROM channels
@@ -254,6 +494,35 @@ func (q *Queries) ListWardChannels(ctx context.Context, wardID int32) ([]ListWar
 			&i.ReadOnly,
 			&i.CreatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const publicIDsByIDs = `-- name: PublicIDsByIDs :many
+SELECT id, public_id FROM posts WHERE id = ANY($1::bigint[])
+`
+
+type PublicIDsByIDsRow struct {
+	ID       int64
+	PublicID uuid.UUID
+}
+
+func (q *Queries) PublicIDsByIDs(ctx context.Context, ids []int64) ([]PublicIDsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, publicIDsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PublicIDsByIDsRow
+	for rows.Next() {
+		var i PublicIDsByIDsRow
+		if err := rows.Scan(&i.ID, &i.PublicID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
