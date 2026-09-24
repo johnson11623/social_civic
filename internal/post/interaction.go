@@ -411,12 +411,13 @@ func (h *PostHandlers) Replies(w http.ResponseWriter, r *http.Request) {
 	httpjson.Write(w, http.StatusOK, resp)
 }
 
-// bump invalidates the feed that shows the post; failures only delay freshness.
+// bump invalidates the feed that shows the post (its counts changed);
+// failures only delay freshness.
 func (h *PostHandlers) bump(r *http.Request, p Post) {
-	if h.Cache == nil || p.Level != LevelWard {
-		return // elevated feeds get their own versions with Feature 2.1.4
+	if h.Cache == nil {
+		return
 	}
-	if err := h.Cache.BumpWard(r.Context(), p.WardID); err != nil {
-		h.Logger.WarnContext(r.Context(), "feed cache bump failed", "ward", p.WardID, "err", err)
+	if err := h.Cache.Bump(r.Context(), ScopeOf(p)); err != nil {
+		h.Logger.WarnContext(r.Context(), "feed cache bump failed", "scope", ScopeOf(p).Name(), "err", err)
 	}
 }

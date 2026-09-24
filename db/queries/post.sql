@@ -37,6 +37,7 @@ RETURNING id, created_at;
 -- name: GetPostByPublicID :one
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.constituency_id, p.county_id, p.score,
        p.state, p.created_at, p.channel_id, p.root_id, p.parent_id,
+       p.sponsored, p.label_text_en, p.label_text_sw,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
        COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
@@ -93,3 +94,68 @@ LIMIT sqlc.arg(max_rows);
 
 -- name: PublicIDsByIDs :many
 SELECT id, public_id FROM posts WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- Feature 2.1.4 — one level's organic feed, walking (score, id) downward.
+-- Each level has its own query so the planner uses that level's partial index.
+
+-- name: FeedWard :many
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN channels c ON c.id = p.channel_id
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.level = 1 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
+  AND p.ward_id = sqlc.arg(scope_id)::int
+  AND (p.score, p.id) < (sqlc.arg(after_score)::real, sqlc.arg(after_id)::bigint)
+ORDER BY p.score DESC, p.id DESC
+LIMIT sqlc.arg(max_rows);
+
+-- name: FeedConstituency :many
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN channels c ON c.id = p.channel_id
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.level = 2 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
+  AND p.constituency_id = sqlc.arg(scope_id)::int
+  AND (p.score, p.id) < (sqlc.arg(after_score)::real, sqlc.arg(after_id)::bigint)
+ORDER BY p.score DESC, p.id DESC
+LIMIT sqlc.arg(max_rows);
+
+-- name: FeedCounty :many
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN channels c ON c.id = p.channel_id
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.level = 3 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
+  AND p.county_id = sqlc.arg(scope_id)::int
+  AND (p.score, p.id) < (sqlc.arg(after_score)::real, sqlc.arg(after_id)::bigint)
+ORDER BY p.score DESC, p.id DESC
+LIMIT sqlc.arg(max_rows);
+
+-- name: FeedNational :many
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN channels c ON c.id = p.channel_id
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.level = 4 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
+  AND (p.score, p.id) < (sqlc.arg(after_score)::real, sqlc.arg(after_id)::bigint)
+ORDER BY p.score DESC, p.id DESC
+LIMIT sqlc.arg(max_rows);
+
+-- name: LikedAmong :many
+SELECT post_id FROM post_likes WHERE user_id = $1 AND post_id = ANY(sqlc.arg(post_ids)::bigint[]);

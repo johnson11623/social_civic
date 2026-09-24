@@ -41,6 +41,7 @@ type config struct {
 	RedisURL      string
 	PIIKey        string
 	RateLimitKey  string
+	FeedKey       string
 }
 
 func loadConfig() (config, error) {
@@ -54,6 +55,7 @@ func loadConfig() (config, error) {
 		RedisURL:      os.Getenv("REDIS_URL"),
 		PIIKey:        os.Getenv("PII_ENCRYPTION_KEY"),
 		RateLimitKey:  os.Getenv("RATE_LIMIT_KEY"),
+		FeedKey:       os.Getenv("FEED_SIGNING_KEY"),
 	}
 	switch {
 	case c.DatabaseURL == "":
@@ -68,6 +70,8 @@ func loadConfig() (config, error) {
 		return c, errors.New("REDIS_URL is required")
 	case len(c.RateLimitKey) < 32:
 		return c, errors.New("RATE_LIMIT_KEY is required (at least 32 bytes)")
+	case len(c.FeedKey) < 32:
+		return c, errors.New("FEED_SIGNING_KEY is required (at least 32 bytes)")
 	}
 	// F-01: the env-based pepper and static keyring are for development only.
 	if c.Env == "production" {
@@ -183,7 +187,9 @@ func run(logger *slog.Logger) error {
 	postMinute, postDay := perUser("post-min", 10, time.Minute), perUser("post-day", 100, 24*time.Hour)
 	// T-2.1.3.7 — 60 likes and 20 replies a minute per user.
 	likeLimit, replyLimit := perUser("like", 60, time.Minute), perUser("reply", 20, time.Minute)
-	posts := &post.PostHandlers{Store: post.NewStore(pool), Cache: post.RedisFeedCache{Client: rdb}, Logger: logger}
+	feedCache := post.RedisFeedCache{Client: rdb, Key: []byte(cfg.FeedKey)}
+	posts := &post.PostHandlers{Store: post.NewStore(pool), Cache: feedCache, Logger: logger}
+	feed := &post.FeedHandlers{Store: post.NewStore(pool), Cache: feedCache, Logger: logger}
 
 	r := chi.NewRouter()
 	r.Use(requestid.Middleware, middleware.Recoverer)
@@ -205,6 +211,7 @@ func run(logger *slog.Logger) error {
 	r.With(requireAuth).Get("/v1/channels/{channel_id}", channels.Get)
 	r.With(requireAuth, requireConsent, channelLimit).Post("/v1/channels", channels.Create)
 	r.With(requireAuth, requireConsent, postMinute, postDay).Post("/v1/channels/{channel_id}/posts", posts.Create)
+	r.With(requireAuth).Get("/v1/feed", feed.Feed)
 	r.With(requireAuth).Get("/v1/posts/{post_id}", posts.Get)
 	r.With(requireAuth).Get("/v1/posts/{post_id}/replies", posts.Replies)
 	r.With(requireAuth, requireConsent, likeLimit).Post("/v1/posts/{post_id}/likes", posts.Like)

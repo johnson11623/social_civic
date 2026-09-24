@@ -17,6 +17,12 @@ type Querier interface {
 	DeleteLike(ctx context.Context, arg DeleteLikeParams) (int64, error)
 	// One platform-owned #general channel per ward; idempotent.
 	EnsureGeneralChannels(ctx context.Context) (int64, error)
+	FeedConstituency(ctx context.Context, arg FeedConstituencyParams) ([]FeedConstituencyRow, error)
+	FeedCounty(ctx context.Context, arg FeedCountyParams) ([]FeedCountyRow, error)
+	FeedNational(ctx context.Context, arg FeedNationalParams) ([]FeedNationalRow, error)
+	// Feature 2.1.4 — one level's organic feed, walking (score, id) downward.
+	// Each level has its own query so the planner uses that level's partial index.
+	FeedWard(ctx context.Context, arg FeedWardParams) ([]FeedWardRow, error)
 	GetActiveUserByPublicID(ctx context.Context, publicID uuid.UUID) (GetActiveUserByPublicIDRow, error)
 	GetChannelByPublicID(ctx context.Context, publicID uuid.UUID) (GetChannelByPublicIDRow, error)
 	GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (GetPostByPublicIDRow, error)
@@ -27,6 +33,7 @@ type Querier interface {
 	InsertLike(ctx context.Context, arg InsertLikeParams) (int64, error)
 	InsertPost(ctx context.Context, arg InsertPostParams) (InsertPostRow, error)
 	InsertReply(ctx context.Context, arg InsertReplyParams) (InsertReplyRow, error)
+	LikedAmong(ctx context.Context, arg LikedAmongParams) ([]int64, error)
 	// Replies of a thread in conversation order, keyset-paginated.
 	ListThread(ctx context.Context, arg ListThreadParams) ([]ListThreadRow, error)
 	// #general first, then by name.

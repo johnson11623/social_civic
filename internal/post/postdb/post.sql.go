@@ -95,6 +95,314 @@ func (q *Queries) EnsureGeneralChannels(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const feedConstituency = `-- name: FeedConstituency :many
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN channels c ON c.id = p.channel_id
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.level = 2 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
+  AND p.constituency_id = $1::int
+  AND (p.score, p.id) < ($2::real, $3::bigint)
+ORDER BY p.score DESC, p.id DESC
+LIMIT $4
+`
+
+type FeedConstituencyParams struct {
+	ScopeID    int32
+	AfterScore float32
+	AfterID    int64
+	MaxRows    int32
+}
+
+type FeedConstituencyRow struct {
+	ID                int64
+	PublicID          uuid.UUID
+	Content           pgtype.Text
+	Level             int16
+	WardID            int32
+	Score             float32
+	CreatedAt         time.Time
+	ChannelPublicID   uuid.UUID
+	ChannelName       string
+	AuthorPublicID    uuid.UUID
+	AuthorDisplayName string
+	LikeCount         int32
+	ReplyCount        int32
+}
+
+func (q *Queries) FeedConstituency(ctx context.Context, arg FeedConstituencyParams) ([]FeedConstituencyRow, error) {
+	rows, err := q.db.Query(ctx, feedConstituency,
+		arg.ScopeID,
+		arg.AfterScore,
+		arg.AfterID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FeedConstituencyRow
+	for rows.Next() {
+		var i FeedConstituencyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublicID,
+			&i.Content,
+			&i.Level,
+			&i.WardID,
+			&i.Score,
+			&i.CreatedAt,
+			&i.ChannelPublicID,
+			&i.ChannelName,
+			&i.AuthorPublicID,
+			&i.AuthorDisplayName,
+			&i.LikeCount,
+			&i.ReplyCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const feedCounty = `-- name: FeedCounty :many
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN channels c ON c.id = p.channel_id
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.level = 3 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
+  AND p.county_id = $1::int
+  AND (p.score, p.id) < ($2::real, $3::bigint)
+ORDER BY p.score DESC, p.id DESC
+LIMIT $4
+`
+
+type FeedCountyParams struct {
+	ScopeID    int32
+	AfterScore float32
+	AfterID    int64
+	MaxRows    int32
+}
+
+type FeedCountyRow struct {
+	ID                int64
+	PublicID          uuid.UUID
+	Content           pgtype.Text
+	Level             int16
+	WardID            int32
+	Score             float32
+	CreatedAt         time.Time
+	ChannelPublicID   uuid.UUID
+	ChannelName       string
+	AuthorPublicID    uuid.UUID
+	AuthorDisplayName string
+	LikeCount         int32
+	ReplyCount        int32
+}
+
+func (q *Queries) FeedCounty(ctx context.Context, arg FeedCountyParams) ([]FeedCountyRow, error) {
+	rows, err := q.db.Query(ctx, feedCounty,
+		arg.ScopeID,
+		arg.AfterScore,
+		arg.AfterID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FeedCountyRow
+	for rows.Next() {
+		var i FeedCountyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublicID,
+			&i.Content,
+			&i.Level,
+			&i.WardID,
+			&i.Score,
+			&i.CreatedAt,
+			&i.ChannelPublicID,
+			&i.ChannelName,
+			&i.AuthorPublicID,
+			&i.AuthorDisplayName,
+			&i.LikeCount,
+			&i.ReplyCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const feedNational = `-- name: FeedNational :many
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN channels c ON c.id = p.channel_id
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.level = 4 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
+  AND (p.score, p.id) < ($1::real, $2::bigint)
+ORDER BY p.score DESC, p.id DESC
+LIMIT $3
+`
+
+type FeedNationalParams struct {
+	AfterScore float32
+	AfterID    int64
+	MaxRows    int32
+}
+
+type FeedNationalRow struct {
+	ID                int64
+	PublicID          uuid.UUID
+	Content           pgtype.Text
+	Level             int16
+	WardID            int32
+	Score             float32
+	CreatedAt         time.Time
+	ChannelPublicID   uuid.UUID
+	ChannelName       string
+	AuthorPublicID    uuid.UUID
+	AuthorDisplayName string
+	LikeCount         int32
+	ReplyCount        int32
+}
+
+func (q *Queries) FeedNational(ctx context.Context, arg FeedNationalParams) ([]FeedNationalRow, error) {
+	rows, err := q.db.Query(ctx, feedNational, arg.AfterScore, arg.AfterID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FeedNationalRow
+	for rows.Next() {
+		var i FeedNationalRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublicID,
+			&i.Content,
+			&i.Level,
+			&i.WardID,
+			&i.Score,
+			&i.CreatedAt,
+			&i.ChannelPublicID,
+			&i.ChannelName,
+			&i.AuthorPublicID,
+			&i.AuthorDisplayName,
+			&i.LikeCount,
+			&i.ReplyCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const feedWard = `-- name: FeedWard :many
+
+SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
+       c.public_id AS channel_public_id, c.name AS channel_name,
+       u.public_id AS author_public_id, u.display_name AS author_display_name,
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+FROM posts p
+JOIN channels c ON c.id = p.channel_id
+JOIN users u ON u.id = p.author_id
+LEFT JOIN post_counters pc ON pc.post_id = p.id
+WHERE p.level = 1 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
+  AND p.ward_id = $1::int
+  AND (p.score, p.id) < ($2::real, $3::bigint)
+ORDER BY p.score DESC, p.id DESC
+LIMIT $4
+`
+
+type FeedWardParams struct {
+	ScopeID    int32
+	AfterScore float32
+	AfterID    int64
+	MaxRows    int32
+}
+
+type FeedWardRow struct {
+	ID                int64
+	PublicID          uuid.UUID
+	Content           pgtype.Text
+	Level             int16
+	WardID            int32
+	Score             float32
+	CreatedAt         time.Time
+	ChannelPublicID   uuid.UUID
+	ChannelName       string
+	AuthorPublicID    uuid.UUID
+	AuthorDisplayName string
+	LikeCount         int32
+	ReplyCount        int32
+}
+
+// Feature 2.1.4 — one level's organic feed, walking (score, id) downward.
+// Each level has its own query so the planner uses that level's partial index.
+func (q *Queries) FeedWard(ctx context.Context, arg FeedWardParams) ([]FeedWardRow, error) {
+	rows, err := q.db.Query(ctx, feedWard,
+		arg.ScopeID,
+		arg.AfterScore,
+		arg.AfterID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FeedWardRow
+	for rows.Next() {
+		var i FeedWardRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublicID,
+			&i.Content,
+			&i.Level,
+			&i.WardID,
+			&i.Score,
+			&i.CreatedAt,
+			&i.ChannelPublicID,
+			&i.ChannelName,
+			&i.AuthorPublicID,
+			&i.AuthorDisplayName,
+			&i.LikeCount,
+			&i.ReplyCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getActiveUserByPublicID = `-- name: GetActiveUserByPublicID :one
 SELECT id, ward_id, constituency_id, county_id FROM users WHERE public_id = $1 AND state = 1
 `
@@ -156,6 +464,7 @@ func (q *Queries) GetChannelByPublicID(ctx context.Context, publicID uuid.UUID) 
 const getPostByPublicID = `-- name: GetPostByPublicID :one
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.constituency_id, p.county_id, p.score,
        p.state, p.created_at, p.channel_id, p.root_id, p.parent_id,
+       p.sponsored, p.label_text_en, p.label_text_sw,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
        COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
@@ -180,6 +489,9 @@ type GetPostByPublicIDRow struct {
 	ChannelID         int64
 	RootID            pgtype.Int8
 	ParentID          pgtype.Int8
+	Sponsored         bool
+	LabelTextEn       pgtype.Text
+	LabelTextSw       pgtype.Text
 	ChannelPublicID   uuid.UUID
 	ChannelName       string
 	AuthorPublicID    uuid.UUID
@@ -205,6 +517,9 @@ func (q *Queries) GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (Ge
 		&i.ChannelID,
 		&i.RootID,
 		&i.ParentID,
+		&i.Sponsored,
+		&i.LabelTextEn,
+		&i.LabelTextSw,
 		&i.ChannelPublicID,
 		&i.ChannelName,
 		&i.AuthorPublicID,
@@ -386,6 +701,35 @@ func (q *Queries) InsertReply(ctx context.Context, arg InsertReplyParams) (Inser
 	var i InsertReplyRow
 	err := row.Scan(&i.ID, &i.CreatedAt)
 	return i, err
+}
+
+const likedAmong = `-- name: LikedAmong :many
+SELECT post_id FROM post_likes WHERE user_id = $1 AND post_id = ANY($2::bigint[])
+`
+
+type LikedAmongParams struct {
+	UserID  int64
+	PostIds []int64
+}
+
+func (q *Queries) LikedAmong(ctx context.Context, arg LikedAmongParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, likedAmong, arg.UserID, arg.PostIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var post_id int64
+		if err := rows.Scan(&post_id); err != nil {
+			return nil, err
+		}
+		items = append(items, post_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listThread = `-- name: ListThread :many

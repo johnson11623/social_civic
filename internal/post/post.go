@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -13,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
@@ -64,6 +62,9 @@ type Post struct {
 	Likes        int
 	Replies      int
 	Liked        *bool // for the caller, when known
+	Sponsored    bool
+	LabelEN      string
+	LabelSW      string
 }
 
 // PostCreatedData is the payload of post.created. Content is left out: events
@@ -133,6 +134,7 @@ func (s *Store) PostByPublicID(ctx context.Context, id uuid.UUID) (Post, error) 
 		Score: r.Score, State: r.State, CreatedAt: r.CreatedAt,
 		ChannelRowID: r.ChannelID, RootID: r.RootID.Int64, ParentID: r.ParentID.Int64,
 		Likes: int(r.LikeCount), Replies: int(r.ReplyCount),
+		Sponsored: r.Sponsored, LabelEN: r.LabelTextEn.String, LabelSW: r.LabelTextSw.String,
 	}
 	q := postdb.New(s.pool)
 	if p.RootID != 0 {
@@ -144,26 +146,6 @@ func (s *Store) PostByPublicID(ctx context.Context, id uuid.UUID) (Post, error) 
 		}
 	}
 	return p, nil
-}
-
-// ---- Feed cache versions (T-2.1.2.6) ----------------------------------------------
-
-// FeedCache tracks a version per feed scope. Feed keys embed the version
-// (LLD §7), so bumping it invalidates every cached page of that feed at once
-// without races; stale keys expire by TTL.
-type FeedCache interface {
-	BumpWard(ctx context.Context, wardID int32) error
-}
-
-// RedisFeedCache implements FeedCache.
-type RedisFeedCache struct{ Client *redis.Client }
-
-// WardVersionKey is the Redis key holding a ward feed's version.
-func WardVersionKey(wardID int32) string { return "feed:v:ward:" + strconv.Itoa(int(wardID)) }
-
-// BumpWard implements FeedCache.
-func (c RedisFeedCache) BumpWard(ctx context.Context, wardID int32) error {
-	return c.Client.Incr(ctx, WardVersionKey(wardID)).Err()
 }
 
 // ---- HTTP -------------------------------------------------------------------------
@@ -181,9 +163,17 @@ type PostJSON struct {
 	Author    *AuthorRef `json:"author,omitempty"`
 	Counts    Counts     `json:"counts"`
 	Liked     *bool      `json:"liked,omitempty"`
-	RootID    string     `json:"root_id,omitempty"`   // replies: the thread's top-level post
-	ParentID  string     `json:"parent_id,omitempty"` // replies: the post or reply answered
+	Sponsored bool       `json:"sponsored"`
+	Label     *Label     `json:"sponsored_label,omitempty"` // both languages, always shown together
+	RootID    string     `json:"root_id,omitempty"`         // replies: the thread's top-level post
+	ParentID  string     `json:"parent_id,omitempty"`       // replies: the post or reply answered
 	CreatedAt time.Time  `json:"created_at"`
+}
+
+// Label is a sponsored post's immutable bilingual disclosure (F-07).
+type Label struct {
+	EN string `json:"en"`
+	SW string `json:"sw"`
 }
 
 // AuthorRef identifies a post's author publicly.
@@ -208,6 +198,9 @@ func postJSON(p Post) PostJSON {
 	}
 	if p.RootID != 0 {
 		out.RootID, out.ParentID = p.RootPublic.String(), p.ParentPublic.String()
+	}
+	if p.Sponsored {
+		out.Sponsored, out.Label = true, &Label{EN: p.LabelEN, SW: p.LabelSW}
 	}
 	if p.State == StateActive || p.State == StateFrozen {
 		content := p.Content
@@ -304,7 +297,7 @@ func (h *PostHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	// The post is committed; a cache miss only delays it (feed TTL ≤ 30 s).
 	if h.Cache != nil {
-		if err := h.Cache.BumpWard(r.Context(), created.WardID); err != nil {
+		if err := h.Cache.Bump(r.Context(), ScopeOf(created)); err != nil {
 			h.Logger.WarnContext(r.Context(), "feed cache bump failed", "ward", created.WardID, "err", err)
 		}
 	}

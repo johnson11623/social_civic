@@ -73,7 +73,7 @@ func TestPosts_CreateAtWardLevel(t *testing.T) {
 		t.Errorf("event payload = %s", payload)
 	}
 	// T-2.1.2.6 — the ward feed cache version was bumped.
-	if len(e.cache.bumped) != 1 || e.cache.bumped[0] != kiamwangi {
+	if len(e.cache.bumped) != 1 || e.cache.bumped[0] != (Scope{LevelWard, kiamwangi}) {
 		t.Errorf("cache bumps = %v", e.cache.bumped)
 	}
 }

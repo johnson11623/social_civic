@@ -122,6 +122,9 @@ type Post struct {
 	DeletedAt      *time.Time
 	RootID         pgtype.Int8
 	ParentID       pgtype.Int8
+	Sponsored      bool
+	LabelTextEn    pgtype.Text
+	LabelTextSw    pgtype.Text
 }
 
 type PostActor struct {

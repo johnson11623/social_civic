@@ -64,14 +64,14 @@ type env struct {
 
 type fakeCache struct {
 	mu     sync.Mutex
-	bumped []int32
+	bumped []Scope
 	err    error
 }
 
-func (c *fakeCache) BumpWard(_ context.Context, ward int32) error {
+func (c *fakeCache) Bump(_ context.Context, s Scope) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.bumped = append(c.bumped, ward)
+	c.bumped = append(c.bumped, s)
 	return c.err
 }
 

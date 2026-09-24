@@ -39,6 +39,7 @@ DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
 DEV_NATIONAL_ID_PEPPER   ?= dev-only-national-id-pepper-change-me-0123
 DEV_RATE_LIMIT_KEY       ?= dev-only-rate-limit-key-change-me-0123456789
 DEV_PII_ENCRYPTION_KEY   ?= dev-only-pii-encryption-key-change-me-012345
+DEV_FEED_SIGNING_KEY     ?= dev-only-feed-signing-key-change-me-0123456
 SQLC := docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.27.0
 
 help: ## List available commands
@@ -125,6 +126,7 @@ run-api: db-up migrate-up db-seed redis-up ## Run the API against the dev databa
 	DATABASE_URL="$(HOST_DB_URL)" \
 	REDIS_URL="redis://localhost:$(REDIS_PORT)/0" \
 	RATE_LIMIT_KEY="$(DEV_RATE_LIMIT_KEY)" \
+	FEED_SIGNING_KEY="$(DEV_FEED_SIGNING_KEY)" \
 	PII_ENCRYPTION_KEY="$(DEV_PII_ENCRYPTION_KEY)" \
 	JWT_SIGNING_KEY="$(DEV_JWT_SIGNING_KEY)" \
 	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)" \
