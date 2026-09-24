@@ -29,7 +29,13 @@ N ?= 1
 .DEFAULT_GOAL := help
 .PHONY: help db-up db-down db-reset db-logs db-ps db-psql db-url \
         migrate-up migrate-down migrate-down-all migrate-version migrate-force migrate-create \
-        test-db test-db-up test-db-run test-db-down test-db-psql
+        test-db test-db-up test-db-run test-db-down test-db-psql \
+        run-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
+
+# Development-only secrets for run-api. Production uses KMS/Vault (T-X.4).
+DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
+DEV_NATIONAL_ID_PEPPER   ?= dev-only-national-id-pepper-change-me-0123
+SQLC := docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.27.0
 
 help: ## List available commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -105,3 +111,37 @@ test-db-down: ## Remove the test Postgres (its data is in-memory)
 
 test-db-psql: ## Open psql in the running test database
 	$(COMPOSE) --profile test exec postgres-test psql -U civic -d civic_test
+
+## ---- Go -------------------------------------------------------------------
+
+run-api: db-up migrate-up ## Run the API against the dev database (dev-only secrets)
+	DATABASE_URL="$(HOST_DB_URL)" \
+	JWT_SIGNING_KEY="$(DEV_JWT_SIGNING_KEY)" \
+	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)" \
+	go run ./cmd/api
+
+build: ## Build all binaries into bin/
+	go build -trimpath -o bin/ ./cmd/...
+
+fmt: ## Format Go code
+	gofmt -w cmd internal pkg
+
+vet: ## Run go vet
+	go vet ./...
+
+test: ## Unit tests (integration tests skip without a database)
+	go test -race -count=1 ./...
+
+test-integration: ## Go tests against a fresh, migrated test database
+	@$(MAKE) test-db-up
+	@status=0; \
+	$(MIGRATE_TEST) up && TEST_DATABASE_URL="$(HOST_TEST_DB_URL)" go test -race -count=1 ./... || status=$$?; \
+	$(MAKE) test-db-down; exit $$status
+
+test-all: test-db test-integration ## SQL schema tests, then Go tests against a real database
+
+sqlc-generate: ## Regenerate Go code from db/queries
+	$(SQLC) generate
+
+sqlc-check: ## Fail if generated sqlc code is out of date
+	$(SQLC) diff
