@@ -114,7 +114,11 @@ up() {
 	echo "  App        $WEB_URL"
 	echo "  API        $API_URL/v1/health"
 	echo "  Media CDN  http://localhost:18080/media/variants/…"
-	echo "  Login codes appear in .dev/logs/api.log (\"DEV SMS\")."
+	if [ -n "${AFRICASTALKING_API_KEY:-}" ]; then
+		echo "  Login codes are sent by SMS (Africa's Talking)."
+	else
+		echo "  Login codes appear in .dev/logs/api.log (\"DEV SMS\")."
+	fi
 	echo "  Stop with: make dev-stop    Logs: make dev-logs"
 	command -v open >/dev/null && open "$WEB_URL" || true
 }

@@ -87,6 +87,24 @@ func loadConfig() (config, error) {
 	return c, nil
 }
 
+// smsSender sends login codes through Africa's Talking when
+// AFRICASTALKING_API_KEY is set, otherwise to the log (development). With
+// FORCE_SEND_SMS_SYNC=true the request waits for the carrier; otherwise the
+// SMS goes out in the background.
+func smsSender(logger *slog.Logger) sms.Sender {
+	at, ok := sms.AfricasTalkingFromEnv(logger)
+	if !ok {
+		logger.Warn("AFRICASTALKING_API_KEY not set: login codes are logged, not sent")
+		return sms.DevLogSender{Logger: logger}
+	}
+	sync := os.Getenv("FORCE_SEND_SMS_SYNC") == "true"
+	logger.Info("sms via Africa's Talking", "username", at.Username, "sender_id", at.SenderID, "sync", sync)
+	if sync {
+		return at
+	}
+	return sms.Async{Sender: at, Logger: logger}
+}
+
 func getenv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -174,7 +192,7 @@ func run(logger *slog.Logger) error {
 		Store:   identityStore,
 		Keyring: keyring,
 		Tokens:  tokens,
-		SMS:     sms.DevLogSender{Logger: logger}, // carrier adapter: EPIC 4.5
+		SMS:     smsSender(logger),
 		Limiter: limiter,
 		Logger:  logger,
 		Now:     time.Now,

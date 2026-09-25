@@ -1,6 +1,5 @@
-// Package sms sends text messages. The carrier adapter (Africa's Talking /
-// Safaricom bulk SMS, zero-rated) arrives with EPIC 4.5; until then the dev
-// sender writes messages to the log.
+// Package sms sends text messages: through Africa's Talking when configured
+// (africastalking.go), otherwise the dev sender writes them to the log.
 package sms
 
 import (
@@ -22,11 +21,7 @@ type DevLogSender struct {
 
 // Send implements Sender.
 func (s DevLogSender) Send(ctx context.Context, to, text string) error {
-	masked := to
-	if len(to) > 7 {
-		masked = to[:7] + "***" + to[len(to)-2:]
-	}
-	s.Logger.WarnContext(ctx, "DEV SMS (not sent)", "to", masked, "text", text)
+	s.Logger.WarnContext(ctx, "DEV SMS (not sent)", "to", Mask(to), "text", text)
 	return nil
 }
 

@@ -15,6 +15,11 @@ MEDIA_CDN_PORT     ?= 18080
 export POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT POSTGRES_TEST_PORT KAFKA_PORT REDIS_PORT \
        S3_PORT MEDIA_CDN_PORT
 
+# SMS login codes via Africa's Talking (set in .env; without an API key the
+# API logs codes instead). Exported, not on command lines, so the key stays
+# out of `ps`.
+export AFRICASTALKING_USERNAME AFRICASTALKING_API_KEY AFRICASTALKING_SENDER_ID FORCE_SEND_SMS_SYNC
+
 COMPOSE := docker compose
 
 # URLs as seen from inside the compose network (used by the migrate container)
