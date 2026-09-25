@@ -12,7 +12,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/johnson11623/social_civic/internal/media"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
 	"github.com/johnson11623/social_civic/internal/platform/problem"
@@ -68,6 +70,8 @@ type Post struct {
 
 	AuthorRowID int64 // internal: authorship checks (appeals), events
 	Moderation  *Moderation
+	MediaRowID  int64 // internal: attached media on create
+	Media       *media.MediaJSON
 }
 
 // Moderation is the decision behind a frozen or removed post.
@@ -118,6 +122,7 @@ func (s *Store) CreatePost(ctx context.Context, author ActiveUser, channelID int
 			WardID:         author.WardID,
 			ConstituencyID: author.ConstituencyID,
 			CountyID:       author.CountyID,
+			MediaID:        pgtype.Int8{Int64: p.MediaRowID, Valid: p.MediaRowID != 0},
 		})
 		if err != nil {
 			return err
@@ -146,7 +151,7 @@ func (s *Store) PostByPublicID(ctx context.Context, id uuid.UUID) (Post, error) 
 		ChannelRowID: r.ChannelID, RootID: r.RootID.Int64, ParentID: r.ParentID.Int64,
 		Likes: int(r.LikeCount), Replies: int(r.ReplyCount),
 		Sponsored: r.Sponsored, LabelEN: r.LabelTextEn.String, LabelSW: r.LabelTextSw.String,
-		AuthorRowID: r.AuthorID,
+		AuthorRowID: r.AuthorID, Media: media.Embedded(s.MediaCDN, r.Media),
 	}
 	if r.ModerationActionID != "" {
 		p.Moderation = &Moderation{ActionID: r.ModerationActionID, Action: r.ModerationAction,
@@ -183,9 +188,11 @@ type PostJSON struct {
 	Label     *Label     `json:"sponsored_label,omitempty"` // both languages, always shown together
 	// Frozen or removed: the decision, its harm and the appeal deadline.
 	Moderation *Moderation `json:"moderation,omitempty"`
-	RootID     string      `json:"root_id,omitempty"`   // replies: the thread's top-level post
-	ParentID   string      `json:"parent_id,omitempty"` // replies: the post or reply answered
-	CreatedAt  time.Time   `json:"created_at"`
+	// An attached image or video (hidden with the content when removed).
+	Media     *media.MediaJSON `json:"media,omitempty"`
+	RootID    string           `json:"root_id,omitempty"`   // replies: the thread's top-level post
+	ParentID  string           `json:"parent_id,omitempty"` // replies: the post or reply answered
+	CreatedAt time.Time        `json:"created_at"`
 }
 
 // Label is a sponsored post's immutable bilingual disclosure (F-07).
@@ -224,6 +231,7 @@ func postJSON(p Post) PostJSON {
 	if p.State == StateActive || p.State == StateFrozen {
 		content := p.Content
 		out.Content = &content
+		out.Media = p.Media
 	}
 	if p.AuthorName != "" {
 		out.Author = &AuthorRef{PublicID: p.AuthorID.String(), DisplayName: p.AuthorName}
@@ -233,8 +241,9 @@ func postJSON(p Post) PostJSON {
 
 // CreatePostRequest is the body of POST /v1/channels/{channel_id}/posts.
 type CreatePostRequest struct {
-	Content  string  `json:"content"`
-	MediaURL *string `json:"media_url"`
+	Content string `json:"content"`
+	// A ready image or video uploaded through /v1/media; text is then optional.
+	MediaID *string `json:"media_id"`
 }
 
 // PostHandlers serves post endpoints. Routes must run behind authn.Middleware
@@ -262,8 +271,9 @@ func (h *PostHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	content := strings.TrimSpace(req.Content)
+	hasMedia := req.MediaID != nil && *req.MediaID != ""
 	switch {
-	case content == "":
+	case content == "" && !hasMedia:
 		problem.Write(w, r, http.StatusUnprocessableEntity, "content_empty", i18n.MsgContentEmpty,
 			problem.FieldError{Field: "content", Code: "required"})
 		return
@@ -271,11 +281,23 @@ func (h *PostHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		problem.Write(w, r, http.StatusUnprocessableEntity, "content_too_long", i18n.MsgContentTooLong,
 			problem.FieldError{Field: "content", Code: "too_long"})
 		return
-	case req.MediaURL != nil && *req.MediaURL != "":
-		// Media is entitlement-gated and uploads aren't built yet (T-W1.4.2.4).
-		problem.Write(w, r, http.StatusUnprocessableEntity, "validation_failed", i18n.MsgMediaNotSupported,
-			problem.FieldError{Field: "media_url", Code: "not_supported"})
-		return
+	}
+	var mediaRowID int64
+	if hasMedia {
+		mediaID, err := uuid.Parse(*req.MediaID)
+		if err == nil {
+			mediaRowID, err = postdb.New(h.Store.pool).GetAttachableMedia(r.Context(), postdb.GetAttachableMediaParams{PublicID: mediaID, OwnerID: user.ID})
+		}
+		if errors.Is(err, pgx.ErrNoRows) || mediaRowID == 0 {
+			// Not the author's, not uploaded, or still processing.
+			problem.Write(w, r, http.StatusUnprocessableEntity, "media_not_ready", i18n.MsgMediaNotReady,
+				problem.FieldError{Field: "media_id", Code: "not_ready"})
+			return
+		}
+		if err != nil {
+			internal(w, r, h.Logger, "media", err)
+			return
+		}
 	}
 
 	channel, err := h.Store.ChannelByPublicID(r.Context(), channelID)
@@ -303,7 +325,8 @@ func (h *PostHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	created, err := h.Store.CreatePost(r.Context(), user, channelRowID,
-		Post{PublicID: uuid.Must(uuid.NewV7()), ChannelID: channel.PublicID, ChannelName: channel.Name, Content: content},
+		Post{PublicID: uuid.Must(uuid.NewV7()), ChannelID: channel.PublicID, ChannelName: channel.Name, Content: content,
+			MediaRowID: mediaRowID},
 		func(p Post) events.Event {
 			return events.New("post", events.TopicPostCreated, p.CreatedAt, PostCreatedData{
 				PostID: p.PublicID.String(), ChannelID: p.ChannelID.String(), AuthorID: user.ID, WardID: p.WardID,
@@ -321,6 +344,12 @@ func (h *PostHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	created.AuthorID, created.AuthorName = user.PublicID, user.DisplayName
+	if mediaRowID != 0 {
+		// The response carries the media as feeds will show it.
+		if full, err := h.Store.PostByPublicID(r.Context(), created.PublicID); err == nil {
+			created.Media = full.Media
+		}
+	}
 	liked := false
 	created.Liked = &liked
 	httpjson.Write(w, http.StatusCreated, postJSON(created))

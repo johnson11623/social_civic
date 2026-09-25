@@ -15,6 +15,9 @@ const (
 	TopicModerationAction   = "moderation.action_recorded"
 	TopicAppealFiled        = "appeal.filed"
 	TopicAppealResolved     = "appeal.resolved"
+	TopicMediaUploaded      = "media.uploaded"
+	TopicMediaProcessed     = "media.processed"
+	TopicMediaFailed        = "media.failed"
 )
 
 // AllTopics lists every topic the platform publishes to, for provisioning.
@@ -31,4 +34,7 @@ var AllTopics = []string{
 	TopicModerationAction,
 	TopicAppealFiled,
 	TopicAppealResolved,
+	TopicMediaUploaded,
+	TopicMediaProcessed,
+	TopicMediaFailed,
 }

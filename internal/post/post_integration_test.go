@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/google/uuid"
 	"net/http"
 	"strings"
 	"testing"
@@ -94,9 +95,10 @@ func TestPosts_Validation(t *testing.T) {
 	if _, status := e.post(t, channel, tok, strings.Repeat("ñ", 500)); status != 201 {
 		t.Errorf("500 chars: %d", status)
 	}
-	rec := e.do(t, "POST", "/v1/channels/"+channel+"/posts", tok, map[string]any{"content": "photo", "media_url": "https://x/y.jpg"})
-	if rec.Code != 422 {
-		t.Errorf("media: %d", rec.Code)
+	// Media must be the author's own, uploaded and processed.
+	rec := e.do(t, "POST", "/v1/channels/"+channel+"/posts", tok, map[string]any{"content": "photo", "media_id": uuid.NewString()})
+	if rec.Code != 422 || code(t, rec) != "media_not_ready" {
+		t.Errorf("media: %d %s", rec.Code, rec.Body)
 	}
 	if n := count(t, e.pool, "SELECT count(*) FROM posts"); n != 1 {
 		t.Errorf("posts = %d, want 1", n)

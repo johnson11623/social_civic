@@ -95,6 +95,28 @@ type ErasureStep struct {
 	UpdatedAt time.Time
 }
 
+type Medium struct {
+	ID           int64
+	PublicID     uuid.UUID
+	OwnerID      int64
+	Kind         int16
+	MimeType     string
+	DeclaredSize int64
+	SizeBytes    pgtype.Int8
+	AltText      string
+	State        int16
+	OriginalKey  string
+	Width        pgtype.Int4
+	Height       pgtype.Int4
+	DurationMs   pgtype.Int4
+	Placeholder  pgtype.Text
+	Variants     []byte
+	Error        pgtype.Text
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	ProcessedAt  *time.Time
+}
+
 type ModerationAction struct {
 	ID            int64
 	PublicID      uuid.UUID
@@ -156,6 +178,7 @@ type Post struct {
 	Sponsored      bool
 	LabelTextEn    pgtype.Text
 	LabelTextSw    pgtype.Text
+	MediaID        pgtype.Int8
 }
 
 type PostActor struct {

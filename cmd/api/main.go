@@ -20,6 +20,7 @@ import (
 
 	"github.com/johnson11623/social_civic/internal/boundary"
 	"github.com/johnson11623/social_civic/internal/identity"
+	"github.com/johnson11623/social_civic/internal/media"
 	"github.com/johnson11623/social_civic/internal/membership"
 	"github.com/johnson11623/social_civic/internal/moderation"
 	"github.com/johnson11623/social_civic/internal/platform/authn"
@@ -44,6 +45,8 @@ type config struct {
 	PIIKey        string
 	RateLimitKey  string
 	FeedKey       string
+	S3            media.StorageConfig
+	MediaCDN      string
 }
 
 func loadConfig() (config, error) {
@@ -58,6 +61,8 @@ func loadConfig() (config, error) {
 		PIIKey:        os.Getenv("PII_ENCRYPTION_KEY"),
 		RateLimitKey:  os.Getenv("RATE_LIMIT_KEY"),
 		FeedKey:       os.Getenv("FEED_SIGNING_KEY"),
+		S3:            media.StorageConfigFromEnv(),
+		MediaCDN:      getenv("MEDIA_CDN_URL", "http://localhost:18080/media/variants"),
 	}
 	switch {
 	case c.DatabaseURL == "":
@@ -182,7 +187,9 @@ func run(logger *slog.Logger) error {
 	profile := &identity.ProfileHandlers{Pool: pool, Boundary: tree, Logger: logger}
 	mfa := &identity.MFAHandlers{Pool: pool, Keyring: keyring, Tokens: tokens, Logger: logger, Now: time.Now}
 	roles := &membership.Handlers{Store: membership.NewStore(pool), Logger: logger, Now: time.Now}
-	channels := &post.ChannelHandlers{Store: post.NewStore(pool), Wards: tree, Logger: logger}
+	postStore := post.NewStore(pool)
+	postStore.MediaCDN = cfg.MediaCDN
+	channels := &post.ChannelHandlers{Store: postStore, Wards: tree, Logger: logger}
 	// Per-user limit on channel creation (spam), after authentication.
 	perUser := func(name string, n int, window time.Duration) func(http.Handler) http.Handler {
 		return ratelimit.Middleware(limiter, ratelimit.Rule{Name: name, Limit: n, Window: window}, post.KeyByUser, tooManyRequests, logger)
@@ -193,9 +200,9 @@ func run(logger *slog.Logger) error {
 	// T-2.1.3.7 — 60 likes and 20 replies a minute per user.
 	likeLimit, replyLimit := perUser("like", 60, time.Minute), perUser("reply", 20, time.Minute)
 	feedCache := post.RedisFeedCache{Client: rdb, Key: []byte(cfg.FeedKey)}
-	mod := &moderation.Handlers{Pool: pool, Posts: post.NewStore(pool), Members: roles, Cache: feedCache, Logger: logger, Now: time.Now}
-	posts := &post.PostHandlers{Store: post.NewStore(pool), Cache: feedCache, Logger: logger}
-	feed := &post.FeedHandlers{Store: post.NewStore(pool), Cache: feedCache, Logger: logger}
+	mod := &moderation.Handlers{Pool: pool, Posts: postStore, Members: roles, Cache: feedCache, Logger: logger, Now: time.Now}
+	posts := &post.PostHandlers{Store: postStore, Cache: feedCache, Logger: logger}
+	feed := &post.FeedHandlers{Store: postStore, Cache: feedCache, Logger: logger}
 
 	r := chi.NewRouter()
 	r.Use(requestid.Middleware, middleware.Recoverer)
@@ -216,6 +223,26 @@ func run(logger *slog.Logger) error {
 	// F-08 — TOTP enrolment and step-up; 5 codes per 15 minutes per user.
 	mfaLimit := perUser("mfa", 5, 15*time.Minute)
 	requireMFA := authn.RequireMFA(identity.MFARequired)
+	// docs/media — uploads go straight to storage with signed URLs; disabled
+	// when no S3 endpoint is configured.
+	if cfg.S3.Endpoint != "" {
+		storage, err := media.NewStorage(cfg.S3)
+		if err != nil {
+			return fmt.Errorf("media storage: %w", err)
+		}
+		bucketCtx, cancelBuckets := context.WithTimeout(ctx, 30*time.Second)
+		if err := storage.EnsureBuckets(bucketCtx); err != nil {
+			logger.Warn("media storage unavailable; uploads will fail until it is up (make media-up)", "err", err)
+		}
+		cancelBuckets()
+		uploads := &media.Handlers{Pool: pool, Storage: storage, CDNBase: cfg.MediaCDN, Logger: logger, Now: time.Now}
+		// 30 uploads an hour per user.
+		r.With(requireAuth, requireConsent, perUser("media", 30, time.Hour)).Post("/v1/media/uploads", uploads.CreateUpload)
+		r.With(requireAuth, requireConsent).Post("/v1/media/{media_id}/complete", uploads.Complete)
+		r.With(requireAuth).Get("/v1/media/{media_id}", uploads.Get)
+	} else {
+		logger.Info("media uploads disabled: S3_ENDPOINT not set")
+	}
 	r.With(requireAuth).Get("/v1/users/me", profile.Get)
 	r.With(requireAuth, perUser("profile", 20, time.Hour)).Patch("/v1/users/me", profile.Update)
 	r.With(requireAuth).Get("/v1/users/me/mfa", mfa.Status)

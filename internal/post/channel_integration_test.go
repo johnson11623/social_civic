@@ -49,7 +49,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 			t.Fatal(err)
 		}
 	})
-	if _, err := pool.Exec(ctx, "TRUNCATE users, consents, channels, posts, post_likes, post_actors, post_counters, outbox RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE users, consents, channels, posts, post_likes, post_actors, post_counters, media, outbox RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("reset (is the database migrated?): %v", err)
 	}
 	return pool
@@ -89,7 +89,9 @@ func newEnv(t *testing.T) *env {
 	}
 	h := &ChannelHandlers{Store: NewStore(pool), Wards: tree, Logger: logger}
 	cache := &fakeCache{}
-	ph := &PostHandlers{Store: NewStore(pool), Cache: cache, Logger: logger}
+	store := NewStore(pool)
+	store.MediaCDN = "http://cdn.test/media/variants"
+	ph := &PostHandlers{Store: store, Cache: cache, Logger: logger}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
 	requireConsent := identity.RequireConsent(identity.NewPostgresStore(pool), logger)
 	r := chi.NewRouter()

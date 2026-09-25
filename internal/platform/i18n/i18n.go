@@ -80,6 +80,7 @@ const (
 	MsgAlreadyLiked        Key = "post.already_liked"
 	MsgLikeNotFound        Key = "post.like_not_found"
 	MsgPostNotActive       Key = "post.not_active"
+	MsgMediaNotReady       Key = "post.media_not_ready"
 
 	MsgInsufficientAuthority Key = "membership.insufficient_authority"
 	MsgAlreadyAssigned       Key = "membership.already_assigned"
@@ -104,6 +105,13 @@ const (
 	MsgAppealNotFound   Key = "moderation.appeal_not_found"
 	MsgAppealDecided    Key = "moderation.appeal_decided"
 	MsgInvalidDecision  Key = "moderation.invalid_decision"
+
+	MsgAltTextTooLong   Key = "media.alt_text_too_long"
+	MsgMediaUnsupported Key = "media.unsupported"
+	MsgMediaTooLarge    Key = "media.too_large"
+	MsgMediaNotFound    Key = "media.not_found"
+	MsgUploadMissing    Key = "media.upload_missing"
+	MsgUploadRejected   Key = "media.upload_rejected"
 
 	MsgSearchTooShort Key = "boundary.search_too_short"
 	MsgSearchTooLong  Key = "boundary.search_too_long"

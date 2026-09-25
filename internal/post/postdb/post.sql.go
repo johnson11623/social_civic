@@ -99,11 +99,15 @@ const feedConstituency = `-- name: FeedConstituency :many
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.level = 2 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
   AND p.constituency_id = $1::int
   AND (p.score, p.id) < ($2::real, $3::bigint)
@@ -132,6 +136,7 @@ type FeedConstituencyRow struct {
 	AuthorDisplayName string
 	LikeCount         int32
 	ReplyCount        int32
+	Media             []byte
 }
 
 func (q *Queries) FeedConstituency(ctx context.Context, arg FeedConstituencyParams) ([]FeedConstituencyRow, error) {
@@ -162,6 +167,7 @@ func (q *Queries) FeedConstituency(ctx context.Context, arg FeedConstituencyPara
 			&i.AuthorDisplayName,
 			&i.LikeCount,
 			&i.ReplyCount,
+			&i.Media,
 		); err != nil {
 			return nil, err
 		}
@@ -177,11 +183,15 @@ const feedCounty = `-- name: FeedCounty :many
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.level = 3 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
   AND p.county_id = $1::int
   AND (p.score, p.id) < ($2::real, $3::bigint)
@@ -210,6 +220,7 @@ type FeedCountyRow struct {
 	AuthorDisplayName string
 	LikeCount         int32
 	ReplyCount        int32
+	Media             []byte
 }
 
 func (q *Queries) FeedCounty(ctx context.Context, arg FeedCountyParams) ([]FeedCountyRow, error) {
@@ -240,6 +251,7 @@ func (q *Queries) FeedCounty(ctx context.Context, arg FeedCountyParams) ([]FeedC
 			&i.AuthorDisplayName,
 			&i.LikeCount,
 			&i.ReplyCount,
+			&i.Media,
 		); err != nil {
 			return nil, err
 		}
@@ -255,11 +267,15 @@ const feedNational = `-- name: FeedNational :many
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.level = 4 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
   AND (p.score, p.id) < ($1::real, $2::bigint)
 ORDER BY p.score DESC, p.id DESC
@@ -286,6 +302,7 @@ type FeedNationalRow struct {
 	AuthorDisplayName string
 	LikeCount         int32
 	ReplyCount        int32
+	Media             []byte
 }
 
 func (q *Queries) FeedNational(ctx context.Context, arg FeedNationalParams) ([]FeedNationalRow, error) {
@@ -311,6 +328,7 @@ func (q *Queries) FeedNational(ctx context.Context, arg FeedNationalParams) ([]F
 			&i.AuthorDisplayName,
 			&i.LikeCount,
 			&i.ReplyCount,
+			&i.Media,
 		); err != nil {
 			return nil, err
 		}
@@ -327,11 +345,15 @@ const feedWard = `-- name: FeedWard :many
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.level = 1 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
   AND p.ward_id = $1::int
   AND (p.score, p.id) < ($2::real, $3::bigint)
@@ -360,6 +382,7 @@ type FeedWardRow struct {
 	AuthorDisplayName string
 	LikeCount         int32
 	ReplyCount        int32
+	Media             []byte
 }
 
 // Feature 2.1.4 — one level's organic feed, walking (score, id) downward.
@@ -392,6 +415,7 @@ func (q *Queries) FeedWard(ctx context.Context, arg FeedWardParams) ([]FeedWardR
 			&i.AuthorDisplayName,
 			&i.LikeCount,
 			&i.ReplyCount,
+			&i.Media,
 		); err != nil {
 			return nil, err
 		}
@@ -428,6 +452,23 @@ func (q *Queries) GetActiveUserByPublicID(ctx context.Context, publicID uuid.UUI
 		&i.CountyID,
 	)
 	return i, err
+}
+
+const getAttachableMedia = `-- name: GetAttachableMedia :one
+SELECT id FROM media WHERE public_id = $1 AND owner_id = $2 AND state = 3
+`
+
+type GetAttachableMediaParams struct {
+	PublicID uuid.UUID
+	OwnerID  int64
+}
+
+// Media a post may carry: the author's own, processed and ready.
+func (q *Queries) GetAttachableMedia(ctx context.Context, arg GetAttachableMediaParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getAttachableMedia, arg.PublicID, arg.OwnerID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getChannelByPublicID = `-- name: GetChannelByPublicID :one
@@ -477,11 +518,15 @@ SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.constituency_id, p.co
        p.author_id,
        COALESCE(ma.public_id::text, '')::text AS moderation_action_id, COALESCE(ma.action, '')::text AS moderation_action,
        COALESCE(ma.reason_code, '')::text AS moderation_reason,
-       ma.appeal_due_at AS moderation_appeal_due_at
+       ma.appeal_due_at AS moderation_appeal_due_at,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 LEFT JOIN LATERAL (
     SELECT public_id, action, reason_code, appeal_due_at
     FROM moderation_actions
@@ -520,6 +565,7 @@ type GetPostByPublicIDRow struct {
 	ModerationAction      string
 	ModerationReason      string
 	ModerationAppealDueAt *time.Time
+	Media                 []byte
 }
 
 // The decision behind a frozen or removed post (W1.4.3.5: reason + appeal).
@@ -554,6 +600,7 @@ func (q *Queries) GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (Ge
 		&i.ModerationAction,
 		&i.ModerationReason,
 		&i.ModerationAppealDueAt,
+		&i.Media,
 	)
 	return i, err
 }
@@ -656,8 +703,8 @@ func (q *Queries) InsertLike(ctx context.Context, arg InsertLikeParams) (int64, 
 }
 
 const insertPost = `-- name: InsertPost :one
-INSERT INTO posts (public_id, channel_id, author_id, content, ward_id, constituency_id, county_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO posts (public_id, channel_id, author_id, content, ward_id, constituency_id, county_id, media_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING id, created_at
 `
 
@@ -669,6 +716,7 @@ type InsertPostParams struct {
 	WardID         int32
 	ConstituencyID int32
 	CountyID       int32
+	MediaID        pgtype.Int8
 }
 
 type InsertPostRow struct {
@@ -685,6 +733,7 @@ func (q *Queries) InsertPost(ctx context.Context, arg InsertPostParams) (InsertP
 		arg.WardID,
 		arg.ConstituencyID,
 		arg.CountyID,
+		arg.MediaID,
 	)
 	var i InsertPostRow
 	err := row.Scan(&i.ID, &i.CreatedAt)
@@ -766,10 +815,14 @@ const listChannelPosts = `-- name: ListChannelPosts :many
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        p.sponsored, p.label_text_en, p.label_text_sw,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.channel_id = $1 AND p.state = 1 AND p.root_id IS NULL
   AND (p.created_at, p.id) < ($2::timestamptz, $3::bigint)
 ORDER BY p.created_at DESC, p.id DESC
@@ -798,6 +851,7 @@ type ListChannelPostsRow struct {
 	AuthorDisplayName string
 	LikeCount         int32
 	ReplyCount        int32
+	Media             []byte
 }
 
 // W2.1.3 — a channel's top-level posts, newest first, keyset on (created_at, id).
@@ -830,6 +884,7 @@ func (q *Queries) ListChannelPosts(ctx context.Context, arg ListChannelPostsPara
 			&i.AuthorDisplayName,
 			&i.LikeCount,
 			&i.ReplyCount,
+			&i.Media,
 		); err != nil {
 			return nil, err
 		}

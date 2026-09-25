@@ -73,5 +73,12 @@
   "identity.mfa_required": "Thibitisha ni wewe kwa msimbo kutoka programu yako ya uthibitishaji.",
   "identity.mfa_already_enabled": "Uthibitishaji wa hatua mbili tayari umewashwa.",
   "identity.mfa_not_enrolled": "Weka kwanza uthibitishaji wa hatua mbili.",
-  "identity.mfa_invalid_code": "Msimbo huo si sahihi, au tayari umetumika."
+  "identity.mfa_invalid_code": "Msimbo huo si sahihi, au tayari umetumika.",
+  "media.alt_text_too_long": "Maelezo yasizidi herufi 1000.",
+  "media.unsupported": "Pakia picha ya JPEG, PNG au WebP, au video ya MP4, MOV au WebM.",
+  "media.too_large": "Faili hilo ni kubwa mno: picha hadi MB 10, video hadi MB 100.",
+  "media.not_found": "Upakiaji huo haupo.",
+  "media.upload_missing": "Faili bado halijamaliza kupakiwa.",
+  "media.upload_rejected": "Faili hilo si picha au video linalodai kuwa, au ni kubwa mno.",
+  "post.media_not_ready": "Subiri picha au video imalize kuchakatwa, au iipakie tena."
 }

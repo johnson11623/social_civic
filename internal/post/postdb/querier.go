@@ -24,6 +24,8 @@ type Querier interface {
 	// Each level has its own query so the planner uses that level's partial index.
 	FeedWard(ctx context.Context, arg FeedWardParams) ([]FeedWardRow, error)
 	GetActiveUserByPublicID(ctx context.Context, publicID uuid.UUID) (GetActiveUserByPublicIDRow, error)
+	// Media a post may carry: the author's own, processed and ready.
+	GetAttachableMedia(ctx context.Context, arg GetAttachableMediaParams) (int64, error)
 	GetChannelByPublicID(ctx context.Context, publicID uuid.UUID) (GetChannelByPublicIDRow, error)
 	// The decision behind a frozen or removed post (W1.4.3.5: reason + appeal).
 	GetPostByPublicID(ctx context.Context, publicID uuid.UUID) (GetPostByPublicIDRow, error)

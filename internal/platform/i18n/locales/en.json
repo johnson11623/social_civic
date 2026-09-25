@@ -73,5 +73,12 @@
   "identity.mfa_required": "Confirm it's you with a code from your authenticator app.",
   "identity.mfa_already_enabled": "Two-step verification is already on.",
   "identity.mfa_not_enrolled": "Set up two-step verification first.",
-  "identity.mfa_invalid_code": "That code isn't right, or has already been used."
+  "identity.mfa_invalid_code": "That code isn't right, or has already been used.",
+  "media.alt_text_too_long": "Keep the description to 1000 characters.",
+  "media.unsupported": "Upload a JPEG, PNG or WebP image, or an MP4, MOV or WebM video.",
+  "media.too_large": "That file is too big: images up to 10 MB, videos up to 100 MB.",
+  "media.not_found": "No such upload.",
+  "media.upload_missing": "The file hasn't finished uploading.",
+  "media.upload_rejected": "That file isn't the image or video it says it is, or it's too big.",
+  "post.media_not_ready": "Wait for the image or video to finish processing, or upload it again."
 }

@@ -30,9 +30,13 @@ WHERE level = 1
 ON CONFLICT (ward_id, name) DO NOTHING;
 
 -- name: InsertPost :one
-INSERT INTO posts (public_id, channel_id, author_id, content, ward_id, constituency_id, county_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO posts (public_id, channel_id, author_id, content, ward_id, constituency_id, county_id, media_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING id, created_at;
+
+-- name: GetAttachableMedia :one
+-- Media a post may carry: the author's own, processed and ready.
+SELECT id FROM media WHERE public_id = $1 AND owner_id = $2 AND state = 3;
 
 -- name: GetPostByPublicID :one
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.constituency_id, p.county_id, p.score,
@@ -44,11 +48,15 @@ SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.constituency_id, p.co
        p.author_id,
        COALESCE(ma.public_id::text, '')::text AS moderation_action_id, COALESCE(ma.action, '')::text AS moderation_action,
        COALESCE(ma.reason_code, '')::text AS moderation_reason,
-       ma.appeal_due_at AS moderation_appeal_due_at
+       ma.appeal_due_at AS moderation_appeal_due_at,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 -- The decision behind a frozen or removed post (W1.4.3.5: reason + appeal).
 LEFT JOIN LATERAL (
     SELECT public_id, action, reason_code, appeal_due_at
@@ -114,11 +122,15 @@ SELECT id, public_id FROM posts WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.level = 1 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
   AND p.ward_id = sqlc.arg(scope_id)::int
   AND (p.score, p.id) < (sqlc.arg(after_score)::real, sqlc.arg(after_id)::bigint)
@@ -129,11 +141,15 @@ LIMIT sqlc.arg(max_rows);
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.level = 2 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
   AND p.constituency_id = sqlc.arg(scope_id)::int
   AND (p.score, p.id) < (sqlc.arg(after_score)::real, sqlc.arg(after_id)::bigint)
@@ -144,11 +160,15 @@ LIMIT sqlc.arg(max_rows);
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.level = 3 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
   AND p.county_id = sqlc.arg(scope_id)::int
   AND (p.score, p.id) < (sqlc.arg(after_score)::real, sqlc.arg(after_id)::bigint)
@@ -159,11 +179,15 @@ LIMIT sqlc.arg(max_rows);
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        c.public_id AS channel_public_id, c.name AS channel_name,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN channels c ON c.id = p.channel_id
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.level = 4 AND p.state = 1 AND p.root_id IS NULL AND NOT p.sponsored
   AND (p.score, p.id) < (sqlc.arg(after_score)::real, sqlc.arg(after_id)::bigint)
 ORDER BY p.score DESC, p.id DESC
@@ -177,10 +201,14 @@ SELECT post_id FROM post_likes WHERE user_id = $1 AND post_id = ANY(sqlc.arg(pos
 SELECT p.id, p.public_id, p.content, p.level, p.ward_id, p.score, p.created_at,
        p.sponsored, p.label_text_en, p.label_text_sw,
        u.public_id AS author_public_id, u.display_name AS author_display_name,
-       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count
+       COALESCE(pc.like_count, 0)::int AS like_count, COALESCE(pc.reply_count, 0)::int AS reply_count,
+       CASE WHEN md.id IS NULL THEN NULL ELSE jsonb_build_object(
+           'id', md.public_id, 'kind', md.kind, 'alt', md.alt_text, 'w', md.width, 'h', md.height,
+           'ms', md.duration_ms, 'ph', md.placeholder, 'v', md.variants) END::jsonb AS media
 FROM posts p
 JOIN users u ON u.id = p.author_id
 LEFT JOIN post_counters pc ON pc.post_id = p.id
+LEFT JOIN media md ON md.id = p.media_id AND md.state = 3
 WHERE p.channel_id = sqlc.arg(channel_id) AND p.state = 1 AND p.root_id IS NULL
   AND (p.created_at, p.id) < (sqlc.arg(after_time)::timestamptz, sqlc.arg(after_id)::bigint)
 ORDER BY p.created_at DESC, p.id DESC

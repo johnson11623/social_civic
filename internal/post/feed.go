@@ -18,6 +18,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/johnson11623/social_civic/internal/media"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
 	"github.com/johnson11623/social_civic/internal/platform/problem"
@@ -244,7 +245,7 @@ func (s *Store) ScopeFeed(ctx context.Context, sc Scope, after feedAfter, limit 
 			PublicID: r.PublicID, ChannelID: r.ChannelPublicID, ChannelName: r.ChannelName,
 			AuthorID: r.AuthorPublicID, AuthorName: r.AuthorDisplayName, Content: r.Content.String,
 			Level: r.Level, WardID: r.WardID, Score: r.Score, State: StateActive, CreatedAt: r.CreatedAt,
-			Likes: int(r.LikeCount), Replies: int(r.ReplyCount),
+			Likes: int(r.LikeCount), Replies: int(r.ReplyCount), Media: media.Embedded(s.MediaCDN, r.Media),
 		})})
 	}
 	return out, nil

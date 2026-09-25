@@ -57,3 +57,12 @@ sql:
         out: internal/moderation/moderationdb
         sql_package: pgx/v5
         emit_interface: true
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries/media.sql
+    gen:
+      go:
+        package: mediadb
+        out: internal/media/mediadb
+        sql_package: pgx/v5
+        emit_interface: true

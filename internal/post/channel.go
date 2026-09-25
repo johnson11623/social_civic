@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/johnson11623/social_civic/internal/boundary"
+	"github.com/johnson11623/social_civic/internal/media"
 	"github.com/johnson11623/social_civic/internal/platform/authn"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
@@ -107,7 +108,12 @@ type ChannelCreatedData struct {
 }
 
 // Store persists channels.
-type Store struct{ pool *pgxpool.Pool }
+type Store struct {
+	pool *pgxpool.Pool
+	// MediaCDN is the public base URL of processed media, e.g.
+	// http://localhost:18080/media/variants.
+	MediaCDN string
+}
 
 // NewStore wraps a connection pool.
 func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
@@ -496,6 +502,7 @@ func (h *ChannelHandlers) Posts(w http.ResponseWriter, r *http.Request) {
 			Level: row.Level, WardID: row.WardID, Score: row.Score, State: StateActive, CreatedAt: row.CreatedAt,
 			Likes: int(row.LikeCount), Replies: int(row.ReplyCount), Liked: &l,
 			Sponsored: row.Sponsored, LabelEN: row.LabelTextEn.String, LabelSW: row.LabelTextSw.String,
+			Media: media.Embedded(h.Store.MediaCDN, row.Media),
 		}))
 	}
 	httpjson.Write(w, http.StatusOK, resp)
