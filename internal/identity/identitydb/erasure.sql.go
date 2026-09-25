@@ -21,6 +21,7 @@ SET national_id_hash        = $2,
     msisdn_ciphertext       = NULL,
     msisdn_key_version      = NULL,
     msisdn_hash             = NULL,
+    avatar_media_id         = NULL,
     state                   = 3,
     updated_at              = now()
 WHERE id = $1

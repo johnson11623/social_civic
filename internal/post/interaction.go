@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/johnson11623/social_civic/internal/media"
 	"github.com/johnson11623/social_civic/internal/platform/httpjson"
 	"github.com/johnson11623/social_civic/internal/platform/i18n"
 	"github.com/johnson11623/social_civic/internal/platform/problem"
@@ -228,7 +229,8 @@ func (s *Store) Thread(ctx context.Context, rootID int64, after threadCursor, li
 	for _, r := range rows {
 		page.Replies = append(page.Replies, Post{
 			ID: r.ID, PublicID: r.PublicID, Content: r.Content.String, State: r.State, CreatedAt: r.CreatedAt,
-			AuthorID: r.AuthorPublicID, AuthorName: r.AuthorDisplayName, RootID: rootID, ParentID: r.ParentID.Int64,
+			AuthorID: r.AuthorPublicID, AuthorName: r.AuthorDisplayName, AuthorAvatar: media.URL(s.MediaCDN, r.AuthorAvatar),
+			RootID: rootID, ParentID: r.ParentID.Int64,
 			ParentPublic: public[r.ParentID.Int64], Likes: int(r.LikeCount), Replies: int(r.ReplyCount),
 		})
 	}
@@ -359,7 +361,7 @@ func (h *PostHandlers) Reply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.bump(r, parent)
-	reply.AuthorID, reply.AuthorName = user.PublicID, user.DisplayName
+	reply.AuthorID, reply.AuthorName, reply.AuthorAvatar = user.PublicID, user.DisplayName, user.AvatarURL
 	httpjson.Write(w, http.StatusCreated, postJSON(reply))
 }
 

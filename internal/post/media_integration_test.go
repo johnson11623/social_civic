@@ -95,3 +95,27 @@ func TestPosts_MediaMustBeReadyAndOwn(t *testing.T) {
 		}
 	}
 }
+
+func TestPosts_AuthorProfilePhoto(t *testing.T) {
+	e := newEnv(t)
+	channel, tok, userID := e.wardChannel(t, "water")
+	photo := e.readyMedia(t, userID, 1, 3)
+	if _, err := e.pool.Exec(context.Background(),
+		`UPDATE users SET avatar_media_id = (SELECT id FROM media WHERE public_id = $1) WHERE id = $2`, photo, userID); err != nil {
+		t.Fatal(err)
+	}
+	want := "http://cdn.test/media/variants/" + photo + "/thumbnail.jpg"
+
+	created, status := e.post(t, channel, tok, "Borehole fixed")
+	if status != http.StatusCreated || created.Author == nil || created.Author.AvatarURL != want {
+		t.Fatalf("create: %d %+v", status, created.Author)
+	}
+	if got := e.getPost(t, created.PostID, tok); got.Author == nil || got.Author.AvatarURL != want {
+		t.Errorf("get: %+v", got.Author)
+	}
+	var page ChannelPostsResponse
+	_ = json.Unmarshal(e.do(t, "GET", "/v1/channels/"+channel+"/posts", tok, nil).Body.Bytes(), &page)
+	if len(page.Items) != 1 || page.Items[0].Author == nil || page.Items[0].Author.AvatarURL != want {
+		t.Errorf("channel posts: %+v", page.Items)
+	}
+}

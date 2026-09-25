@@ -202,7 +202,7 @@ func run(logger *slog.Logger) error {
 	erasure := &identity.ErasureHandlers{Store: identityStore, Logger: logger, Now: time.Now}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
 	requireConsent := identity.RequireConsent(identityStore, logger)
-	profile := &identity.ProfileHandlers{Pool: pool, Boundary: tree, Logger: logger}
+	profile := &identity.ProfileHandlers{Pool: pool, Boundary: tree, MediaCDN: cfg.MediaCDN, Logger: logger}
 	mfa := &identity.MFAHandlers{Pool: pool, Keyring: keyring, Tokens: tokens, Logger: logger, Now: time.Now}
 	roles := &membership.Handlers{Store: membership.NewStore(pool), Logger: logger, Now: time.Now}
 	postStore := post.NewStore(pool)
@@ -263,6 +263,9 @@ func run(logger *slog.Logger) error {
 	}
 	r.With(requireAuth).Get("/v1/users/me", profile.Get)
 	r.With(requireAuth, perUser("profile", 20, time.Hour)).Patch("/v1/users/me", profile.Update)
+	avatarLimit := perUser("avatar", 20, time.Hour)
+	r.With(requireAuth, avatarLimit).Put("/v1/users/me/avatar", profile.SetAvatar)
+	r.With(requireAuth, avatarLimit).Delete("/v1/users/me/avatar", profile.RemoveAvatar)
 	r.With(requireAuth).Get("/v1/users/me/mfa", mfa.Status)
 	r.With(requireAuth, mfaLimit).Post("/v1/users/me/mfa/totp", mfa.Enrol)
 	r.With(requireAuth, mfaLimit).Post("/v1/users/me/mfa/totp/verify", mfa.Activate)

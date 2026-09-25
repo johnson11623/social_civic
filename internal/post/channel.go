@@ -77,6 +77,7 @@ type ActiveUser struct {
 	WardID         int32
 	ConstituencyID int32
 	CountyID       int32
+	AvatarURL      string // profile photo, empty when none
 }
 
 // Channel is a ward channel.
@@ -125,7 +126,8 @@ func (s *Store) ActiveUser(ctx context.Context, publicID uuid.UUID) (ActiveUser,
 		return ActiveUser{}, ErrNoActiveUser
 	}
 	return ActiveUser{ID: u.ID, PublicID: u.PublicID, DisplayName: u.DisplayName,
-		WardID: u.WardID, ConstituencyID: u.ConstituencyID, CountyID: u.CountyID}, err
+		WardID: u.WardID, ConstituencyID: u.ConstituencyID, CountyID: u.CountyID,
+		AvatarURL: media.URL(s.MediaCDN, u.AvatarKey)}, err
 }
 
 // CreateChannel inserts the channel and enqueues channel.created, atomically.
@@ -498,7 +500,8 @@ func (h *ChannelHandlers) Posts(w http.ResponseWriter, r *http.Request) {
 		l := liked[row.ID]
 		resp.Items = append(resp.Items, postJSON(Post{
 			PublicID: row.PublicID, ChannelID: channel.PublicID, ChannelName: channel.Name,
-			AuthorID: row.AuthorPublicID, AuthorName: row.AuthorDisplayName, Content: row.Content.String,
+			AuthorID: row.AuthorPublicID, AuthorName: row.AuthorDisplayName,
+			AuthorAvatar: media.URL(h.Store.MediaCDN, row.AuthorAvatar), Content: row.Content.String,
 			Level: row.Level, WardID: row.WardID, Score: row.Score, State: StateActive, CreatedAt: row.CreatedAt,
 			Likes: int(row.LikeCount), Replies: int(row.ReplyCount), Liked: &l,
 			Sponsored: row.Sponsored, LabelEN: row.LabelTextEn.String, LabelSW: row.LabelTextSw.String,

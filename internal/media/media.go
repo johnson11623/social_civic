@@ -150,6 +150,14 @@ type MediaJSON struct {
 	Error       string        `json:"error,omitempty"`
 }
 
+// URL is the public address of a processed object key; empty for no key.
+func URL(cdn, key string) string {
+	if key == "" {
+		return ""
+	}
+	return cdn + "/" + key
+}
+
 func variantJSON(cdn string, v ImageVariant) VariantJSON {
 	out := VariantJSON{Name: v.Name, Width: v.Width, Height: v.Height, JPEG: cdn + "/" + v.JPEG}
 	if v.WebP != "" { // absent when the worker's ffmpeg has no WebP encoder

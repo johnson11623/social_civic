@@ -25,7 +25,14 @@ import (
 type ProfileHandlers struct {
 	Pool     *pgxpool.Pool
 	Boundary BoundaryResolver // names the ward
+	MediaCDN string           // public base of processed media (profile photos)
 	Logger   *slog.Logger
+}
+
+// Avatar is the user's profile photo.
+type Avatar struct {
+	MediaID string `json:"media_id"`
+	URL     string `json:"url"`
 }
 
 // WardRef names the user's ward and its parents.
@@ -61,6 +68,7 @@ type Profile struct {
 	Ward          *WardRef      `json:"ward,omitempty"`
 	Consent       ConsentState  `json:"consent"`
 	MFAEnabled    bool          `json:"mfa_enabled"`
+	Avatar        *Avatar       `json:"avatar,omitempty"`
 	Erasure       *ErasureState `json:"erasure,omitempty"`
 }
 
@@ -110,6 +118,9 @@ func (h *ProfileHandlers) write(w http.ResponseWriter, r *http.Request, u identi
 	out := Profile{
 		PublicID: u.PublicID.String(), DisplayName: u.DisplayName, PreferredLang: u.PreferredLang, MemberSince: u.CreatedAt,
 		Consent: ConsentState{Version: CurrentConsentVersion},
+	}
+	if u.AvatarKey != "" {
+		out.Avatar = &Avatar{MediaID: u.AvatarID, URL: h.MediaCDN + "/" + u.AvatarKey}
 	}
 	if h.Boundary != nil {
 		if s, err := h.Boundary.ResolveWard(int(u.WardID)); err == nil {
@@ -191,4 +202,69 @@ func (h *ProfileHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u.DisplayName, u.PreferredLang = row.DisplayName, row.PreferredLang
 	h.write(w, r, u, http.StatusOK)
+}
+
+// SetAvatarRequest is the body of PUT /v1/users/me/avatar.
+type SetAvatarRequest struct {
+	MediaID string `json:"media_id"` // a photo uploaded through /v1/media and processed
+}
+
+// SetAvatar serves PUT /v1/users/me/avatar: uses one of the caller's own
+// processed photos as their profile photo.
+func (h *ProfileHandlers) SetAvatar(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.user(w, r)
+	if !ok {
+		return
+	}
+	var req SetAvatarRequest
+	if err := httpjson.DecodeStrict(w, r, &req); err != nil {
+		problem.Write(w, r, http.StatusBadRequest, "malformed_json", i18n.MsgMalformedJSON)
+		return
+	}
+	q := identitydb.New(h.Pool)
+	var mediaRow int64
+	id, err := uuid.Parse(req.MediaID)
+	if err != nil {
+		err = pgx.ErrNoRows // an unknown id: same answer as any unusable media
+	} else {
+		mediaRow, err = q.GetOwnReadyImage(r.Context(), identitydb.GetOwnReadyImageParams{PublicID: id, OwnerID: u.ID})
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		h.internal(w, r, "avatar media", err)
+		return
+	}
+	if err != nil {
+		// Not a photo, not the caller's, or not processed yet.
+		problem.Write(w, r, http.StatusUnprocessableEntity, "media_not_ready", i18n.MsgMediaNotReady,
+			problem.FieldError{Field: "media_id", Code: "not_ready"})
+		return
+	}
+	if err := q.SetAvatar(r.Context(), identitydb.SetAvatarParams{ID: u.ID, MediaID: pgtype.Int8{Int64: mediaRow, Valid: true}}); err != nil {
+		h.internal(w, r, "set avatar", err)
+		return
+	}
+	h.reload(w, r, u)
+}
+
+// RemoveAvatar serves DELETE /v1/users/me/avatar: back to initials.
+func (h *ProfileHandlers) RemoveAvatar(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.user(w, r)
+	if !ok {
+		return
+	}
+	if err := identitydb.New(h.Pool).SetAvatar(r.Context(), identitydb.SetAvatarParams{ID: u.ID}); err != nil {
+		h.internal(w, r, "remove avatar", err)
+		return
+	}
+	h.reload(w, r, u)
+}
+
+// reload answers with the profile as it now is.
+func (h *ProfileHandlers) reload(w http.ResponseWriter, r *http.Request, u identitydb.GetProfileRow) {
+	fresh, err := identitydb.New(h.Pool).GetProfile(r.Context(), u.PublicID)
+	if err != nil {
+		h.internal(w, r, "reload", err)
+		return
+	}
+	h.write(w, r, fresh, http.StatusOK)
 }

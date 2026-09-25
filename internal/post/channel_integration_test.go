@@ -87,10 +87,10 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &ChannelHandlers{Store: NewStore(pool), Wards: tree, Logger: logger}
-	cache := &fakeCache{}
-	store := NewStore(pool)
+	store := NewStore(pool) // shared, as in cmd/api
 	store.MediaCDN = "http://cdn.test/media/variants"
+	h := &ChannelHandlers{Store: store, Wards: tree, Logger: logger}
+	cache := &fakeCache{}
 	ph := &PostHandlers{Store: store, Cache: cache, Logger: logger}
 	requireAuth := authn.Middleware(tokens, identity.Unauthenticated)
 	requireConsent := identity.RequireConsent(identity.NewPostgresStore(pool), logger)

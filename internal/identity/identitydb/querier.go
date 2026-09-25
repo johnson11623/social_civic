@@ -28,6 +28,9 @@ type Querier interface {
 	GetConsent(ctx context.Context, arg GetConsentParams) (GetConsentRow, error)
 	GetMFA(ctx context.Context, userID int64) (GetMFARow, error)
 	GetOpenErasure(ctx context.Context, userID int64) (GetOpenErasureRow, error)
+	// A photo the user uploaded that has finished processing.
+	GetOwnReadyImage(ctx context.Context, arg GetOwnReadyImageParams) (int64, error)
+	// avatar_key is the smallest processed size of the profile photo, if any.
 	GetProfile(ctx context.Context, publicID uuid.UUID) (GetProfileRow, error)
 	GetRefreshTokenForUpdate(ctx context.Context, jti uuid.UUID) (GetRefreshTokenForUpdateRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
@@ -50,6 +53,7 @@ type Querier interface {
 	RevokeAllUserRefreshTokens(ctx context.Context, arg RevokeAllUserRefreshTokensParams) (int64, error)
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
 	ScrubConsentIPs(ctx context.Context, userID int64) error
+	SetAvatar(ctx context.Context, arg SetAvatarParams) error
 	// A new pending secret replaces an unfinished enrolment, never an enabled one.
 	StartMFAEnrolment(ctx context.Context, arg StartMFAEnrolmentParams) (int64, error)
 	UpdateProfile(ctx context.Context, arg UpdateProfileParams) (UpdateProfileRow, error)

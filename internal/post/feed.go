@@ -243,7 +243,8 @@ func (s *Store) ScopeFeed(ctx context.Context, sc Scope, after feedAfter, limit 
 	for _, r := range rows {
 		out = append(out, feedEntry{ID: r.ID, Post: postJSON(Post{
 			PublicID: r.PublicID, ChannelID: r.ChannelPublicID, ChannelName: r.ChannelName,
-			AuthorID: r.AuthorPublicID, AuthorName: r.AuthorDisplayName, Content: r.Content.String,
+			AuthorID: r.AuthorPublicID, AuthorName: r.AuthorDisplayName,
+			AuthorAvatar: media.URL(s.MediaCDN, r.AuthorAvatar), Content: r.Content.String,
 			Level: r.Level, WardID: r.WardID, Score: r.Score, State: StateActive, CreatedAt: r.CreatedAt,
 			Likes: int(r.LikeCount), Replies: int(r.ReplyCount), Media: media.Embedded(s.MediaCDN, r.Media),
 		})})

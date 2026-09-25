@@ -130,10 +130,30 @@ func (q *Queries) GetMFA(ctx context.Context, userID int64) (GetMFARow, error) {
 	return i, err
 }
 
+const getOwnReadyImage = `-- name: GetOwnReadyImage :one
+SELECT id FROM media WHERE public_id = $1 AND owner_id = $2 AND kind = 1 AND state = 3
+`
+
+type GetOwnReadyImageParams struct {
+	PublicID uuid.UUID
+	OwnerID  int64
+}
+
+// A photo the user uploaded that has finished processing.
+func (q *Queries) GetOwnReadyImage(ctx context.Context, arg GetOwnReadyImageParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getOwnReadyImage, arg.PublicID, arg.OwnerID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getProfile = `-- name: GetProfile :one
-SELECT id, public_id, display_name, preferred_lang, ward_id, created_at
-FROM users
-WHERE public_id = $1 AND state = 1
+SELECT u.id, u.public_id, u.display_name, u.preferred_lang, u.ward_id, u.created_at,
+       COALESCE(av.public_id::text, '')::text AS avatar_id,
+       COALESCE(av.variants->'images'->0->>'jpeg', '')::text AS avatar_key
+FROM users u
+LEFT JOIN media av ON av.id = u.avatar_media_id AND av.state = 3
+WHERE u.public_id = $1 AND u.state = 1
 `
 
 type GetProfileRow struct {
@@ -143,8 +163,11 @@ type GetProfileRow struct {
 	PreferredLang string
 	WardID        int32
 	CreatedAt     time.Time
+	AvatarID      string
+	AvatarKey     string
 }
 
+// avatar_key is the smallest processed size of the profile photo, if any.
 func (q *Queries) GetProfile(ctx context.Context, publicID uuid.UUID) (GetProfileRow, error) {
 	row := q.db.QueryRow(ctx, getProfile, publicID)
 	var i GetProfileRow
@@ -155,6 +178,8 @@ func (q *Queries) GetProfile(ctx context.Context, publicID uuid.UUID) (GetProfil
 		&i.PreferredLang,
 		&i.WardID,
 		&i.CreatedAt,
+		&i.AvatarID,
+		&i.AvatarKey,
 	)
 	return i, err
 }
@@ -479,6 +504,21 @@ type RotateRefreshTokenParams struct {
 
 func (q *Queries) RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error {
 	_, err := q.db.Exec(ctx, rotateRefreshToken, arg.Jti, arg.ReplacedBy)
+	return err
+}
+
+const setAvatar = `-- name: SetAvatar :exec
+UPDATE users SET avatar_media_id = $1, updated_at = now()
+WHERE id = $2 AND state = 1
+`
+
+type SetAvatarParams struct {
+	MediaID pgtype.Int8
+	ID      int64
+}
+
+func (q *Queries) SetAvatar(ctx context.Context, arg SetAvatarParams) error {
+	_, err := q.db.Exec(ctx, setAvatar, arg.MediaID, arg.ID)
 	return err
 }
 

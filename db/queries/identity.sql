@@ -115,9 +115,21 @@ WHERE user_id = sqlc.arg(user_id) AND last_step < sqlc.arg(step);
 DELETE FROM user_mfa WHERE user_id = $1;
 
 -- name: GetProfile :one
-SELECT id, public_id, display_name, preferred_lang, ward_id, created_at
-FROM users
-WHERE public_id = $1 AND state = 1;
+-- avatar_key is the smallest processed size of the profile photo, if any.
+SELECT u.id, u.public_id, u.display_name, u.preferred_lang, u.ward_id, u.created_at,
+       COALESCE(av.public_id::text, '')::text AS avatar_id,
+       COALESCE(av.variants->'images'->0->>'jpeg', '')::text AS avatar_key
+FROM users u
+LEFT JOIN media av ON av.id = u.avatar_media_id AND av.state = 3
+WHERE u.public_id = $1 AND u.state = 1;
+
+-- name: GetOwnReadyImage :one
+-- A photo the user uploaded that has finished processing.
+SELECT id FROM media WHERE public_id = $1 AND owner_id = $2 AND kind = 1 AND state = 3;
+
+-- name: SetAvatar :exec
+UPDATE users SET avatar_media_id = sqlc.narg(media_id), updated_at = now()
+WHERE id = sqlc.arg(id) AND state = 1;
 
 -- name: UpdateProfile :one
 UPDATE users

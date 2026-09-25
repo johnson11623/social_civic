@@ -276,6 +276,7 @@ type User struct {
 	MsisdnCiphertext     []byte
 	MsisdnKeyVersion     pgtype.Text
 	MsisdnHash           []byte
+	AvatarMediaID        pgtype.Int8
 }
 
 type UserMfa struct {

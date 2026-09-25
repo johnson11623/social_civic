@@ -47,6 +47,7 @@ type Post struct {
 	ChannelName    string
 	AuthorID       uuid.UUID
 	AuthorName     string
+	AuthorAvatar   string // profile photo URL, empty when none
 	Content        string
 	Level          int16
 	WardID         int32
@@ -145,8 +146,8 @@ func (s *Store) PostByPublicID(ctx context.Context, id uuid.UUID) (Post, error) 
 	}
 	p := Post{
 		ID: r.ID, PublicID: r.PublicID, ChannelID: r.ChannelPublicID, ChannelName: r.ChannelName,
-		AuthorID: r.AuthorPublicID, AuthorName: r.AuthorDisplayName, Content: r.Content.String,
-		Level: r.Level, WardID: r.WardID, ConstituencyID: r.ConstituencyID, CountyID: r.CountyID,
+		AuthorID: r.AuthorPublicID, AuthorName: r.AuthorDisplayName, AuthorAvatar: media.URL(s.MediaCDN, r.AuthorAvatar),
+		Content: r.Content.String, Level: r.Level, WardID: r.WardID, ConstituencyID: r.ConstituencyID, CountyID: r.CountyID,
 		Score: r.Score, State: r.State, CreatedAt: r.CreatedAt,
 		ChannelRowID: r.ChannelID, RootID: r.RootID.Int64, ParentID: r.ParentID.Int64,
 		Likes: int(r.LikeCount), Replies: int(r.ReplyCount),
@@ -205,6 +206,7 @@ type Label struct {
 type AuthorRef struct {
 	PublicID    string `json:"public_id"`
 	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
 }
 
 // Counts are a post's interaction totals (filled by Feature 2.1.3).
@@ -234,7 +236,7 @@ func postJSON(p Post) PostJSON {
 		out.Media = p.Media
 	}
 	if p.AuthorName != "" {
-		out.Author = &AuthorRef{PublicID: p.AuthorID.String(), DisplayName: p.AuthorName}
+		out.Author = &AuthorRef{PublicID: p.AuthorID.String(), DisplayName: p.AuthorName, AvatarURL: p.AuthorAvatar}
 	}
 	return out
 }
@@ -343,7 +345,7 @@ func (h *PostHandlers) Create(w http.ResponseWriter, r *http.Request) {
 			h.Logger.WarnContext(r.Context(), "feed cache bump failed", "ward", created.WardID, "err", err)
 		}
 	}
-	created.AuthorID, created.AuthorName = user.PublicID, user.DisplayName
+	created.AuthorID, created.AuthorName, created.AuthorAvatar = user.PublicID, user.DisplayName, user.AvatarURL
 	if mediaRowID != 0 {
 		// The response carries the media as feeds will show it.
 		if full, err := h.Store.PostByPublicID(r.Context(), created.PublicID); err == nil {
