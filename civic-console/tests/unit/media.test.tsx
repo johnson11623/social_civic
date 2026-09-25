@@ -218,6 +218,15 @@ describe("media on posts", () => {
 		);
 	});
 
+	it("serves JPEG only when there is no WebP", async () => {
+		const jpegOnly = ready({
+			images: [{ name: "medium", width: 1080, height: 720, jpegUrl: "http://cdn/m1/medium.jpg" }],
+		});
+		const { container } = await renderWithProviders(<PostMedia media={jpegOnly} />);
+		expect(container.querySelector("source")).toBeNull();
+		expect(screen.getByRole("img")).toHaveAttribute("src", "http://cdn/m1/medium.jpg");
+	});
+
 	it("names an undescribed photo after who shared it", async () => {
 		await renderWithProviders(<PostMedia media={ready({ altText: "" })} authorName="Amina" />);
 		expect(screen.getByRole("img", { name: "Photo shared by Amina" })).toBeInTheDocument();

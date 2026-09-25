@@ -34,11 +34,14 @@ function Picture({ media, label }: { media: Media; label: string }) {
 	const sizes = "(min-width: 768px) 640px, 100vw";
 	return (
 		<picture>
-			<source
-				type="image/webp"
-				srcSet={images.map((i) => `${i.webpUrl} ${i.width}w`).join(", ")}
-				sizes={sizes}
-			/>
+			{/* Only when every size has WebP: the local worker may produce JPEG only. */}
+			{images.every((i) => i.webpUrl) && (
+				<source
+					type="image/webp"
+					srcSet={images.map((i) => `${i.webpUrl} ${i.width}w`).join(", ")}
+					sizes={sizes}
+				/>
+			)}
 			<img
 				src={fallback.jpegUrl}
 				srcSet={images.map((i) => `${i.jpegUrl} ${i.width}w`).join(", ")}
