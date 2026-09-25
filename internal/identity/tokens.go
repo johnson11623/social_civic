@@ -1,0 +1,166 @@
+package identity
+
+import (
+	"errors"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+
+	"github.com/johnson11623/social_civic/internal/platform/authn"
+)
+
+const (
+	tokenIssuer   = "identity-service"
+	tokenAudience = "civic-platform"
+
+	AccessTokenTTL  = 15 * time.Minute
+	RefreshTokenTTL = 30 * 24 * time.Hour
+
+	TokenTypeAccess  = "access"
+	TokenTypeRefresh = "refresh"
+)
+
+// Token parse errors.
+var (
+	ErrTokenExpired = errors.New("identity: token expired")
+	ErrTokenInvalid = errors.New("identity: token invalid")
+)
+
+// ScopeClaim is the user's administrative scope (T-1.1.2.6), so services can
+// authorize feed and posting requests without a database lookup.
+type ScopeClaim struct {
+	Ward         int `json:"ward"`
+	Constituency int `json:"constituency"`
+	County       int `json:"county"`
+}
+
+// Claims are the platform's JWT claims (F-03: jti, aud, iss, nbf, exp).
+type Claims struct {
+	jwt.RegisteredClaims
+	Type  string      `json:"typ"`             // "access" or "refresh"
+	Scope *ScopeClaim `json:"scope,omitempty"` // access tokens only
+	// MFA marks an access token issued after a TOTP step-up (F-08). It is
+	// never set on refresh tokens, so step-up lapses with the access token.
+	MFA bool `json:"mfa,omitempty"`
+}
+
+// TokenPair is returned to clients on registration, login and refresh.
+type TokenPair struct {
+	Access           string
+	Refresh          string
+	ExpiresIn        int // access token lifetime in seconds
+	IssuedAt         time.Time
+	RefreshJTI       uuid.UUID
+	RefreshExpiresAt time.Time
+}
+
+// TokenIssuer signs access and refresh tokens with HS256.
+// Asymmetric signing keys from KMS come with T-X.4.
+type TokenIssuer struct {
+	key []byte
+	now func() time.Time
+}
+
+// NewTokenIssuer requires a signing key of at least 32 bytes.
+func NewTokenIssuer(key []byte, now func() time.Time) (*TokenIssuer, error) {
+	if len(key) < 32 {
+		return nil, errors.New("identity: JWT signing key must be at least 32 bytes")
+	}
+	if now == nil {
+		now = time.Now
+	}
+	return &TokenIssuer{key: append([]byte(nil), key...), now: now}, nil
+}
+
+// Issue creates an access/refresh pair for the user's public id. The caller
+// must persist RefreshJTI (see Sessions) or the refresh token will be rejected.
+func (t *TokenIssuer) Issue(subject string, scope ScopeClaim) (TokenPair, error) {
+	now := t.now().Truncate(time.Second) // JWT times have second precision
+	access, _, err := t.sign(subject, TokenTypeAccess, now, AccessTokenTTL, &scope)
+	if err != nil {
+		return TokenPair{}, err
+	}
+	refresh, jti, err := t.sign(subject, TokenTypeRefresh, now, RefreshTokenTTL, nil)
+	if err != nil {
+		return TokenPair{}, err
+	}
+	return TokenPair{
+		Access:           access,
+		Refresh:          refresh,
+		ExpiresIn:        int(AccessTokenTTL.Seconds()),
+		IssuedAt:         now,
+		RefreshJTI:       jti,
+		RefreshExpiresAt: now.Add(RefreshTokenTTL),
+	}, nil
+}
+
+// IssueMFAAccess signs a stepped-up access token (no refresh token: the
+// session's refresh token is unchanged and yields ordinary tokens).
+func (t *TokenIssuer) IssueMFAAccess(subject string, scope ScopeClaim) (string, int, error) {
+	now := t.now().Truncate(time.Second)
+	token, _, err := t.signClaims(subject, TokenTypeAccess, now, AccessTokenTTL, &scope, true)
+	return token, int(AccessTokenTTL.Seconds()), err
+}
+
+func (t *TokenIssuer) sign(subject, typ string, now time.Time, ttl time.Duration, scope *ScopeClaim) (string, uuid.UUID, error) {
+	return t.signClaims(subject, typ, now, ttl, scope, false)
+}
+
+func (t *TokenIssuer) signClaims(subject, typ string, now time.Time, ttl time.Duration, scope *ScopeClaim, mfa bool) (string, uuid.UUID, error) {
+	jti := uuid.Must(uuid.NewV7())
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti.String(),
+			Subject:   subject,
+			Issuer:    tokenIssuer,
+			Audience:  jwt.ClaimStrings{tokenAudience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+		},
+		Type:  typ,
+		Scope: scope,
+		MFA:   mfa,
+	}
+	s, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(t.key)
+	return s, jti, err
+}
+
+// Parse verifies signature, issuer, audience, time claims and token type.
+func (t *TokenIssuer) Parse(token, wantType string) (*Claims, error) {
+	claims := &Claims{}
+	_, err := jwt.ParseWithClaims(token, claims,
+		func(*jwt.Token) (any, error) { return t.key, nil },
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithIssuer(tokenIssuer),
+		jwt.WithAudience(tokenAudience),
+		jwt.WithExpirationRequired(),
+		jwt.WithTimeFunc(t.now),
+	)
+	switch {
+	case errors.Is(err, jwt.ErrTokenExpired):
+		return nil, ErrTokenExpired
+	case err != nil:
+		return nil, errors.Join(ErrTokenInvalid, err)
+	case claims.Type != wantType:
+		return nil, ErrTokenInvalid
+	}
+	if _, err := uuid.Parse(claims.ID); err != nil {
+		return nil, ErrTokenInvalid
+	}
+	return claims, nil
+}
+
+// VerifyAccess implements authn.Verifier for Bearer access tokens.
+func (t *TokenIssuer) VerifyAccess(token string) (authn.Principal, error) {
+	c, err := t.Parse(token, TokenTypeAccess)
+	switch {
+	case errors.Is(err, ErrTokenExpired):
+		return authn.Principal{}, authn.ErrExpired
+	case err != nil || c.Scope == nil || c.Subject == "":
+		return authn.Principal{}, authn.ErrInvalid
+	}
+	return authn.Principal{Subject: c.Subject, Ward: c.Scope.Ward, Constituency: c.Scope.Constituency, County: c.Scope.County,
+		MFA: c.MFA}, nil
+}

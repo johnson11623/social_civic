@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+  lightningcss: true
+  msgpackr-extract: false
+patchedDependencies:
+  effect-tanstack-start@0.2.0: patches/effect-tanstack-start@0.2.0.patch

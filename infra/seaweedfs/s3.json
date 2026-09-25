@@ -1,0 +1,13 @@
+{
+  "identities": [
+    {
+      "name": "civic-dev",
+      "credentials": [{ "accessKey": "civicdev", "secretKey": "civicdev-secret-change-me" }],
+      "actions": ["Admin", "Read", "List", "Tagging", "Write"]
+    },
+    {
+      "name": "anonymous",
+      "actions": ["Read:civic-media"]
+    }
+  ]
+}

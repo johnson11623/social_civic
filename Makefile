@@ -8,7 +8,17 @@ POSTGRES_PASSWORD  ?= civic
 POSTGRES_DB        ?= civic
 POSTGRES_PORT      ?= 5433
 POSTGRES_TEST_PORT ?= 55433
-export POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT POSTGRES_TEST_PORT
+KAFKA_PORT         ?= 19092
+REDIS_PORT         ?= 16379
+S3_PORT            ?= 19000
+MEDIA_CDN_PORT     ?= 18080
+export POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT POSTGRES_TEST_PORT KAFKA_PORT REDIS_PORT \
+       S3_PORT MEDIA_CDN_PORT
+
+# SMS login codes via Africa's Talking (set in .env; without an API key the
+# API logs codes instead). Exported, not on command lines, so the key stays
+# out of `ps`.
+export AFRICASTALKING_USERNAME AFRICASTALKING_API_KEY AFRICASTALKING_SENDER_ID FORCE_SEND_SMS_SYNC
 
 COMPOSE := docker compose
 
@@ -29,7 +39,16 @@ N ?= 1
 .DEFAULT_GOAL := help
 .PHONY: help db-up db-down db-reset db-logs db-ps db-psql db-url \
         migrate-up migrate-down migrate-down-all migrate-version migrate-force migrate-create \
-        test-db test-db-up test-db-run test-db-down test-db-psql
+        test-db test-db-up test-db-run test-db-down test-db-psql \
+        dev dev-share dev-stop dev-status dev-logs db-seed admin-grant media-up media-worker test-media media-down media-reset run-api run-worker kafka-up redis-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
+
+# Development-only secrets for run-api. Production uses KMS/Vault (T-X.4).
+DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
+DEV_NATIONAL_ID_PEPPER   ?= dev-only-national-id-pepper-change-me-0123
+DEV_RATE_LIMIT_KEY       ?= dev-only-rate-limit-key-change-me-0123456789
+DEV_PII_ENCRYPTION_KEY   ?= dev-only-pii-encryption-key-change-me-012345
+DEV_FEED_SIGNING_KEY     ?= dev-only-feed-signing-key-change-me-0123456
+SQLC := docker run --rm -u $$(id -u):$$(id -g) -v "$(CURDIR)":/src -w /src sqlc/sqlc:1.27.0
 
 help: ## List available commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -85,7 +104,7 @@ migrate-create: ## Create a new migration pair (NAME=<snake_case_name>)
 ## ---- Database tests (throwaway database) ----------------------------------
 
 test-db: ## Fresh test DB: migrate up, run test/db/*_test.sql, down/up round-trip, tear down
-	@$(MAKE) test-db-up
+	@$(MAKE) test-db-down test-db-up
 	@status=0; $(MAKE) test-db-run || status=$$?; $(MAKE) test-db-down; exit $$status
 
 test-db-up: ## Start the throwaway test Postgres
@@ -105,3 +124,115 @@ test-db-down: ## Remove the test Postgres (its data is in-memory)
 
 test-db-psql: ## Open psql in the running test database
 	$(COMPOSE) --profile test exec postgres-test psql -U civic -d civic_test
+
+## ---- Go -------------------------------------------------------------------
+
+db-seed: ## Load reference data (IEBC counties, constituencies, wards) into the dev database
+	go run ./cmd/seed -database "$(HOST_DB_URL)"
+
+admin-grant: ## Grant a platform role in the dev database: make admin-grant USER_ID=<public id> ROLE=sysadmin
+	go run ./cmd/admin -database "$(HOST_DB_URL)" -user "$(USER_ID)" -role "$(or $(ROLE),sysadmin)"
+
+# Environment for the API in development (dev-only secrets).
+# Media and uploads go through the web app's address (its dev server proxies
+# /media/variants to the CDN and /s3 to storage), so phones on the LAN or an
+# ngrok tunnel load photos and videos too, not only this machine.
+API_ENV = DATABASE_URL="$(HOST_DB_URL)" \
+	REDIS_URL="redis://localhost:$(REDIS_PORT)/0" \
+	RATE_LIMIT_KEY="$(DEV_RATE_LIMIT_KEY)" \
+	FEED_SIGNING_KEY="$(DEV_FEED_SIGNING_KEY)" \
+	S3_ENDPOINT="localhost:$(S3_PORT)" S3_ACCESS_KEY=civicdev S3_SECRET_KEY=civicdev-secret-change-me \
+	MEDIA_CDN_URL="/media/variants" MEDIA_UPLOAD_BASE="/s3" \
+	PII_ENCRYPTION_KEY="$(DEV_PII_ENCRYPTION_KEY)" \
+	JWT_SIGNING_KEY="$(DEV_JWT_SIGNING_KEY)" \
+	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)"
+
+# Environment for the media worker on the host (Homebrew ffmpeg; JPEG-only
+# variants without libwebp — the container has WebP).
+MEDIA_WORKER_ENV = DATABASE_URL="$(HOST_DB_URL)" KAFKA_BROKERS="localhost:$(KAFKA_PORT)" \
+	S3_ENDPOINT="localhost:$(S3_PORT)" S3_ACCESS_KEY=civicdev S3_SECRET_KEY=civicdev-secret-change-me \
+	MEDIA_VIDEO_RENDITIONS="240p,480p"
+
+run-api: db-up migrate-up db-seed redis-up ## Run the API against the dev database (dev-only secrets)
+	$(API_ENV) go run ./cmd/api
+
+redis-up: ## Start Redis (cache, rate limits) on localhost:$(REDIS_PORT)
+	$(COMPOSE) up -d --wait redis
+
+media-up: ## Start media storage (SeaweedFS S3) and the local CDN (Caddy); the API creates the buckets
+	$(COMPOSE) --profile media up -d --wait seaweedfs caddy
+	@echo "S3 API    http://localhost:$(S3_PORT)  (civicdev / civicdev-secret-change-me)"
+	@echo "Media CDN http://localhost:$(MEDIA_CDN_PORT)/media/variants/…"
+
+media-worker: db-up migrate-up kafka-up media-up ## Run the media worker (Go + ffmpeg in a container); needs `make run-worker` for the outbox
+	$(COMPOSE) --profile media up -d --build mediaworker
+	@echo "Logs: docker compose logs -f mediaworker"
+
+test-media: test-db-down test-db-up media-up ## Media tests with real ffmpeg, PostgreSQL and S3, inside the worker container
+	@status=0; $(MIGRATE_TEST) up && \
+	$(COMPOSE) --profile media --profile test run --rm --build \
+		-e TEST_DATABASE_URL="$(TEST_DB_URL)" -e TEST_S3_ENDPOINT=seaweedfs:8333 \
+		mediaworker go test -count=1 ./internal/media/ || status=$$?; \
+	$(MAKE) test-db-down; exit $$status
+
+media-down: ## Stop media services (stored media is kept)
+	$(COMPOSE) --profile media stop mediaworker seaweedfs caddy
+
+media-reset: ## DESTRUCTIVE: delete all stored media
+	$(COMPOSE) --profile media rm -sf mediaworker seaweedfs caddy
+	docker volume rm -f civic_seaweeddata
+	$(MAKE) media-up
+
+kafka-up: ## Start the dev event bus (Redpanda, Kafka API on localhost:$(KAFKA_PORT))
+	$(COMPOSE) up -d --wait redpanda
+
+run-worker: db-up migrate-up kafka-up ## Run the outbox relay (publishes events to Kafka)
+	DATABASE_URL="$(HOST_DB_URL)" KAFKA_BROKERS="localhost:$(KAFKA_PORT)" go run ./cmd/worker
+
+# ---- One command for everything ------------------------------------------------
+dev: ## Start EVERYTHING (infra, API, workers, web) in the background and open the app
+	@API_ENV='$(API_ENV)' MEDIA_WORKER_ENV='$(MEDIA_WORKER_ENV)' HOST_DB_URL='$(HOST_DB_URL)' KAFKA_PORT=$(KAFKA_PORT) ./scripts/dev.sh up
+
+dev-share: ## Like `make dev`, with the web app built for production: fast for others over ngrok or the LAN (no hot reload)
+	@WEB_MODE=preview API_ENV='$(API_ENV)' MEDIA_WORKER_ENV='$(MEDIA_WORKER_ENV)' HOST_DB_URL='$(HOST_DB_URL)' KAFKA_PORT=$(KAFKA_PORT) ./scripts/dev.sh up
+
+dev-stop: ## Stop what `make dev` started (containers and data are kept)
+	@./scripts/dev.sh stop
+
+dev-status: ## Show what's running and whether it's healthy
+	@./scripts/dev.sh status
+
+dev-logs: ## Follow the logs of everything `make dev` started
+	@./scripts/dev.sh logs
+
+test-api: ## Run the Postman collection with Newman against a running API (make run-api)
+	docker run --rm -v "$(CURDIR)/api/postman":/etc/newman postman/newman:6-alpine \
+		run civic-platform.postman_collection.json --env-var baseUrl=http://host.docker.internal:8090
+
+build: ## Build all binaries into bin/
+	go build -trimpath -o bin/ ./cmd/...
+
+fmt: ## Format Go code
+	gofmt -w cmd internal pkg
+
+vet: ## Run go vet
+	go vet ./...
+
+test: ## Unit tests (integration tests skip without a database)
+	go test -race -count=1 ./...
+
+test-integration: ## Go tests against a fresh, migrated test database and the event bus
+	@$(MAKE) test-db-down test-db-up kafka-up redis-up
+	@status=0; \
+	$(MIGRATE_TEST) up && TEST_DATABASE_URL="$(HOST_TEST_DB_URL)" KAFKA_BROKERS="localhost:$(KAFKA_PORT)" \
+		TEST_REDIS_URL="redis://localhost:$(REDIS_PORT)/15" \
+		go test -race -count=1 -p 1 ./... || status=$$?; \
+	$(MAKE) test-db-down; exit $$status
+
+test-all: test-db test-integration ## SQL schema tests, then Go tests against a real database
+
+sqlc-generate: ## Regenerate Go code from db/queries
+	$(SQLC) generate
+
+sqlc-check: ## Fail if generated sqlc code is out of date
+	$(SQLC) diff

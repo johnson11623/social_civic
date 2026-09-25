@@ -1,0 +1,116 @@
+diff --git a/src/ssr-api-client.ts b/src/ssr-api-client.ts
+index 25c6026260260b7de90d3ab0c0a594fa8d659deb..8f27526c9bc30d7b4dadcb00e19d87c617dce722 100644
+--- a/src/ssr-api-client.ts
++++ b/src/ssr-api-client.ts
+@@ -23,7 +23,8 @@
+  * upstream changes.
+  */
+ 
+-import { Context, Effect, Layer, Scope, Stream } from "effect";
++import { Context, Effect, Layer, Option, Schema, Scope, Stream } from "effect";
++import type * as AST from "effect/SchemaAST";
+ import type { HttpMethod } from "@effect/platform";
+ import {
+   Cookies,
+@@ -83,7 +84,7 @@ const getForwardedHeaders: Effect.Effect<Record<string, string>> = Effect.try({
+     const raw = getRequestHeaders();
+     return raw instanceof globalThis.Headers
+       ? Object.fromEntries(raw.entries())
+-      : ((raw ?? {}) as Record<string, string>);
++      : ((raw ?? {}) as unknown as Record<string, string>);
+   },
+   catch: () => ({}) as Record<string, string>,
+ }).pipe(Effect.catchAll(() => Effect.succeed({} as Record<string, string>)));
+@@ -150,6 +151,33 @@ function extractResponseBody(response: unknown): Effect.Effect<unknown, never> {
+   return Effect.succeed(response);
+ }
+ 
++type StatusSchemas = ReadonlyMap<number, { readonly ast: Option.Option<AST.AST> }>;
++
++/**
++ * Decode the handler's response the way HttpApiClient does over HTTP: a
++ * success status through its success schema (the caller gets the decoded
++ * Type, e.g. camelCase keys from fromKey), an error status through its
++ * error schema as a typed failure. Without this, SSR callers would receive
++ * the encoded wire body, and errors would arrive as successes.
++ */
++function decodeResponse(
++  response: unknown,
++  body: unknown,
++  successes: StatusSchemas,
++  errors: StatusSchemas,
++): Effect.Effect<unknown, unknown> {
++  if (!HttpServerResponse.isServerResponse(response)) return Effect.succeed(body);
++  const status = response.status;
++  const ok = status >= 200 && status < 300;
++  const entry = (ok ? successes : errors).get(status);
++  const ast = entry ? Option.getOrUndefined(entry.ast) : undefined;
++  if (!ast) {
++    return ok ? Effect.succeed(body) : Effect.die(new Error(`SSR call failed with undeclared status ${status}`));
++  }
++  const decoded = Schema.decodeUnknown(Schema.make(ast))(body);
++  return ok ? Effect.orDie(decoded) : Effect.flatMap(Effect.orDie(decoded), Effect.fail);
++}
++
+ /**
+  * Create a Layer that provides the ApiClient via direct SSR handler invocation.
+  * Use this in the server-side runtime for zero-overhead SSR.
+@@ -227,9 +255,13 @@ export function makeSsrApiClientLayer<
+         onEndpoint({
+           endpoint,
+           group,
++          successes,
++          errors,
+         }: {
+           endpoint: HttpApiEndpoint.HttpApiEndpoint<string, HttpMethod.HttpMethod>;
+           group: ReflectedGroup;
++          successes: StatusSchemas;
++          errors: StatusSchemas;
+         }) {
+           const ep: ReflectedEndpoint = endpoint;
+           const route = routeIndex.get(`${ep.method} ${ep.path}`);
+@@ -237,11 +269,26 @@ export function makeSsrApiClientLayer<
+             throw new Error(`No route found for ${ep.method} ${ep.path}`);
+           }
+ 
++          // URL params reach handlers as strings over HTTP; the handler decodes
++          // them (e.g. NumberFromString). Encode the caller's Type values the
++          // same way so SSR calls decode identically.
++          const urlParamsSchema = Option.getOrUndefined(
++            (ep as unknown as { urlParamsSchema: Option.Option<Schema.Schema<unknown, unknown>> })
++              .urlParamsSchema,
++          );
++          const encodeUrlParams = (params: unknown): Effect.Effect<Record<string, unknown>> =>
++            params === undefined
++              ? Effect.succeed({})
++              : urlParamsSchema
++                ? (Effect.orDie(Schema.encode(urlParamsSchema)(params)) as Effect.Effect<Record<string, unknown>>)
++                : Effect.succeed(params as Record<string, unknown>);
++
+           const endpointFn = (request: EndpointRequest): Effect.Effect<unknown, unknown> =>
+-            Effect.flatMap(getForwardedHeaders, (forwarded) => {
++            Effect.flatMap(
++              Effect.all([getForwardedHeaders, encodeUrlParams(request?.urlParams)]),
++              ([forwarded, urlParams]) => {
+               const pathParams = request?.path ?? {};
+               const payload = request?.payload;
+-              const urlParams = request?.urlParams ?? {};
+ 
+               const headers = Headers.fromInput({
+                 ...forwarded,
+@@ -291,7 +338,14 @@ export function makeSsrApiClientLayer<
+                     urlParams as Readonly<Record<string, string | Array<string>>>,
+                   ),
+                 ),
+-              ).pipe(Effect.flatMap(extractResponseBody), Effect.provide(apiContext));
++              ).pipe(
++                Effect.flatMap((response) =>
++                  Effect.flatMap(extractResponseBody(response), (body) =>
++                    decodeResponse(response, body, successes, errors),
++                  ),
++                ),
++                Effect.provide(apiContext),
++              );
+             });
+ 
+           if (group.topLevel) {

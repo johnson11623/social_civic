@@ -37,6 +37,103 @@ services:
       timeout: 3s
       retries: 30
 
+  # Kafka-compatible event bus for development and tests (stack: "Redpanda for dev").
+  # Host clients use localhost:${KAFKA_PORT:-19092}; containers use redpanda:9092.
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.18
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:${KAFKA_PORT:-19092}
+    ports:
+      - "127.0.0.1:${KAFKA_PORT:-19092}:19092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # Cache and rate-limit counters. Ephemeral by design: no persistence.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # ---- Media (docs/media): `make media-up` -----------------------------------
+  # S3-compatible object storage (SeaweedFS stands in for MinIO, whose images
+  # are no longer published). S3 API on localhost:${S3_PORT:-19000}.
+  # Buckets: civic-originals (private; signed URLs only) and civic-media
+  # (processed variants, public-read for the CDN) — see infra/seaweedfs/s3.json.
+  seaweedfs:
+    profiles: ["media"]
+    image: chrislusf/seaweedfs:3.80
+    command:
+      - server
+      - -dir=/data
+      - -s3
+      - -s3.port=8333
+      - -s3.config=/etc/seaweedfs/s3.json
+      - -volume.max=20
+      - -master.volumeSizeLimitMB=256
+    ports:
+      - "127.0.0.1:${S3_PORT:-19000}:8333"
+    volumes:
+      - seaweeddata:/data
+      - ./infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/ || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Local CDN for processed media: localhost:${MEDIA_CDN_PORT:-18080}/media/variants/…
+  caddy:
+    profiles: ["media"]
+    image: caddy:2.9-alpine
+    ports:
+      - "127.0.0.1:${MEDIA_CDN_PORT:-18080}:8080"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - seaweedfs
+
+  # Media worker (Go + ffmpeg): consumes media.uploaded, writes variants.
+  # Runs the mounted source with `go run`; caches persist between runs.
+  mediaworker:
+    profiles: ["media"]
+    build:
+      context: .
+      dockerfile: infra/mediaworker/Dockerfile
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-civic}:${POSTGRES_PASSWORD:-civic}@postgres:5432/${POSTGRES_DB:-civic}?sslmode=disable
+      KAFKA_BROKERS: redpanda:9092
+      S3_ENDPOINT: seaweedfs:8333
+      S3_ACCESS_KEY: civicdev
+      S3_SECRET_KEY: civicdev-secret-change-me
+      # A short ladder keeps local transcoding fast (docs/media §15).
+      MEDIA_VIDEO_RENDITIONS: ${MEDIA_VIDEO_RENDITIONS:-240p,480p}
+    volumes:
+      - .:/src:ro
+      - gobuild:/root/.cache/go-build
+      - gomod:/go/pkg/mod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+
   # golang-migrate CLI, so nobody needs it installed locally.
   migrate:
     profiles: ["tools"]
@@ -46,3 +143,6 @@ services:
 
 volumes:
   pgdata:
+  seaweeddata:
+  gobuild:
+  gomod:
