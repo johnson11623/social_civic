@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,7 +16,7 @@ vi.mock("@/runtimes/get-runtime", () => ({
 }));
 
 const { Composer } = await import("@/components/civic/Composer");
-const { PostMedia } = await import("@/components/civic/PostMedia");
+const { PostMedia, frameRatio } = await import("@/components/civic/PostMedia");
 const { checkFile } = await import("@/lib/upload");
 
 const general: Channel = {
@@ -259,5 +259,125 @@ describe("media on posts", () => {
 		await user.click(screen.getByRole("button", { name: "Play video: A dry tap at the market" }));
 		expect(el.getAttribute("src")).toBe("http://cdn/m1/master.m3u8");
 		expect(within(document.body).queryByRole("button", { name: /Play video/ })).toBeNull();
+	});
+});
+
+describe("feed framing and autoplay", () => {
+	const clip = (id: string, width = 1080, height = 1920) =>
+		ready({
+			mediaId: id,
+			kind: "video",
+			images: [],
+			width,
+			height,
+			durationMs: 11_000,
+			hlsUrl: `http://cdn/${id}/master.m3u8`,
+			poster: { name: "poster", width, height, jpegUrl: `http://cdn/${id}/poster.jpg` },
+		});
+
+	// A controllable IntersectionObserver: tests say how much of each box is visible.
+	let observers: { cb: IntersectionObserverCallback; el?: Element; threshold: boolean }[] = [];
+	const show = async (el: Element, ratio: number) =>
+		act(async () => {
+			for (const o of observers.filter((o) => o.el === el)) {
+				o.cb(
+					[{ isIntersecting: ratio > 0, intersectionRatio: ratio, target: el } as IntersectionObserverEntry],
+					{} as IntersectionObserver,
+				);
+			}
+		});
+	let played: HTMLMediaElement[] = [];
+
+	beforeEach(() => {
+		observers = [];
+		played = [];
+		vi.stubGlobal(
+			"IntersectionObserver",
+			class {
+				entry: (typeof observers)[number];
+				constructor(cb: IntersectionObserverCallback, opts?: IntersectionObserverInit) {
+					this.entry = { cb, threshold: Array.isArray(opts?.threshold) };
+					observers.push(this.entry);
+				}
+				observe(el: Element) {
+					this.entry.el = el;
+				}
+				disconnect() {}
+			},
+		);
+		vi.stubGlobal("matchMedia", () => ({ matches: false }));
+		vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("maybe"); // native HLS
+		vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (this: HTMLMediaElement) {
+			played.push(this);
+			Object.defineProperty(this, "paused", { value: false, configurable: true });
+			this.dispatchEvent(new Event("play"));
+			return Promise.resolve();
+		});
+		vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(function (this: HTMLMediaElement) {
+			Object.defineProperty(this, "paused", { value: true, configurable: true });
+			this.dispatchEvent(new Event("pause"));
+		});
+	});
+	afterEach(() => {
+		vi.restoreAllMocks();
+		Reflect.deleteProperty(navigator, "connection");
+	});
+
+	it("keeps frames between 4:5 and 1.91:1", () => {
+		expect(frameRatio(1080, 1920)).toBe(0.8); // phone video
+		expect(frameRatio(4000, 1000)).toBe(1.91); // panorama
+		expect(frameRatio(1200, 800)).toBe(1.5);
+	});
+
+	it("shows a tall video in a 4:5 frame over a blurred backdrop", async () => {
+		const { container } = await renderWithProviders(<PostMedia media={clip("v1")} />);
+		const frame = container.querySelector("video")?.parentElement as HTMLElement;
+		expect(frame.style.aspectRatio).toMatch(/^0\.8( \/ 1)?$/);
+		expect(frame.querySelector('img[aria-hidden="true"]')).not.toBeNull();
+		expect(screen.getByText("0:11")).toBeInTheDocument();
+	});
+
+	it("plays muted while on screen, pauses when scrolled away, one at a time", async () => {
+		const { container } = await renderWithProviders(
+			<>
+				<PostMedia media={clip("v1")} />
+				<PostMedia media={clip("v2")} />
+			</>,
+		);
+		const [a, b] = Array.from(container.querySelectorAll("video"));
+		const boxOf = (v: Element) => v.closest("div")?.parentElement as Element;
+
+		await show(boxOf(a as Element), 0.7);
+		expect(played).toEqual([a]);
+		expect((a as HTMLVideoElement).muted).toBe(true);
+		expect(a).toHaveAttribute("src", "http://cdn/v1/master.m3u8");
+		expect(screen.getByRole("button", { name: "Unmute" })).toBeInTheDocument();
+
+		await show(boxOf(b as Element), 0.7); // the next one takes over
+		expect((a as HTMLVideoElement).paused).toBe(true);
+		expect(played.at(-1)).toBe(b);
+
+		await show(boxOf(b as Element), 0.1);
+		expect((b as HTMLVideoElement).paused).toBe(true);
+	});
+
+	it("tap for sound and full controls", async () => {
+		const user = userEvent.setup();
+		const { container } = await renderWithProviders(<PostMedia media={clip("v1")} />);
+		const v = container.querySelector("video") as HTMLVideoElement;
+		await show(v.closest("div")?.parentElement as Element, 0.7);
+		await user.click(screen.getByRole("button", { name: /Open video with sound/ }));
+		expect(v.muted).toBe(false);
+		expect(v).toHaveAttribute("controls");
+	});
+
+	it("doesn't autoplay for data savers", async () => {
+		Object.defineProperty(navigator, "connection", { value: { saveData: true }, configurable: true });
+		const { container } = await renderWithProviders(<PostMedia media={clip("v1")} />);
+		const v = container.querySelector("video") as HTMLVideoElement;
+		await show(v.closest("div")?.parentElement as Element, 1);
+		expect(played).toEqual([]);
+		expect(v.getAttribute("src")).toBeNull();
+		expect(screen.getByRole("button", { name: /Play video/ })).toBeInTheDocument();
 	});
 });
