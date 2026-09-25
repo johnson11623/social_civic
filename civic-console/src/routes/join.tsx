@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { StepIndicator } from "@/components/civic/StepIndicator";
 import { CodeStep, RESEND_AFTER_SECONDS } from "@/components/join/CodeStep";
@@ -9,6 +9,7 @@ import { ProfileStep } from "@/components/join/ProfileStep";
 import { type WardChoice, WardStep } from "@/components/join/WardStep";
 import { button } from "@/components/ui/Button";
 import { describeError, fieldErrors } from "@/lib/api-errors";
+import { loadBoundaries } from "@/lib/boundaries";
 import { useT } from "@/lib/i18n/I18nProvider";
 import type { Lang } from "@/lib/i18n/lang";
 import type { MessageKey } from "@/lib/i18n/messages";
@@ -37,6 +38,11 @@ function Join() {
 	const navigate = useNavigate();
 	const router = useRouter();
 	const [step, setStep] = useState<Step>("consent");
+	// Fetch the ward list while the member reads the consent and types their ID,
+	// so the ward step opens ready.
+	useEffect(() => {
+		loadBoundaries().catch(() => undefined);
+	}, []);
 	const [consent, setConsent] = useState(false);
 	const [identity, setIdentity] = useState({ nationalId: "", phone: "" });
 	const [identityErrors, setIdentityErrors] = useState<{ nationalId?: string; phone?: string }>({});

@@ -1,24 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { BoundaryTree, SearchResult, TreeNode } from "@/api/api-contract";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
-import { describeError } from "@/lib/api-errors";
+import { type Area, type Boundaries, loadBoundaries, searchWards, type WardHit } from "@/lib/boundaries";
 import { useT } from "@/lib/i18n/I18nProvider";
-import { callApiEither } from "@/runtimes/get-runtime";
 
 export type WardChoice = { code: number; name: string; constituency: string; county: string };
 
 type Codes = { county: string; constituency: string; ward: string };
 
-const byCode = (nodes: ReadonlyArray<TreeNode> | undefined, code: string) =>
+const byCode = <T extends Area>(nodes: ReadonlyArray<T> | undefined, code: string) =>
 	nodes?.find((n) => String(n.code) === code);
 
 /**
  * T-W1.3.1.5 — find your ward by search (typo-tolerant, from the IEBC data)
- * or step by step: County → Constituency → Ward.
+ * or step by step: County → Constituency → Ward. The data ships with the app
+ * (lib/boundaries, prefetched when the join page opens), so results appear
+ * as you type, with no request per keystroke.
  */
 export function WardStep({
 	initial,
@@ -30,24 +30,26 @@ export function WardStep({
 	onNext: (ward: WardChoice) => void;
 }) {
 	const { t } = useT();
-	const [tree, setTree] = useState<BoundaryTree | undefined>();
+	const [tree, setTree] = useState<Boundaries | undefined>();
 	const [loadError, setLoadError] = useState<string | undefined>();
+	const [attempt, setAttempt] = useState(0);
 	const [codes, setCodes] = useState<Codes>({ county: "", constituency: "", ward: "" });
 	const [query, setQuery] = useState("");
-	const [results, setResults] = useState<ReadonlyArray<SearchResult> | undefined>();
 	const [error, setError] = useState(false);
 	const initialised = useRef(false);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: attempt retries the load
 	useEffect(() => {
 		let live = true;
-		callApiEither((api) => api.boundary.tree()).then(
-			(r) => live && (r._tag === "Right" ? setTree(r.right) : setLoadError(describeError(r.left, t))),
-			(e) => live && setLoadError(describeError(e, t)),
+		setLoadError(undefined);
+		loadBoundaries().then(
+			(b) => live && setTree(b),
+			() => live && setLoadError(t("join.ward.loadFailed")),
 		);
 		return () => {
 			live = false;
 		};
-	}, [t]);
+	}, [t, attempt]);
 
 	// Restore a previous choice once the tree is available.
 	useEffect(() => {
@@ -66,27 +68,16 @@ export function WardStep({
 		}
 	}, [tree, initial]);
 
-	// Debounced search.
-	useEffect(() => {
-		const q = query.trim();
-		if (q.length < 2) return setResults(undefined);
-		let live = true;
-		const timer = setTimeout(() => {
-			callApiEither((api) => api.boundary.search({ urlParams: { q, level: "ward", limit: 8 } })).then(
-				(r) => live && setResults(r._tag === "Right" ? r.right.items : []),
-				() => live && setResults([]),
-			);
-		}, 250);
-		return () => {
-			live = false;
-			clearTimeout(timer);
-		};
-	}, [query]);
+	// Instant: ~1,450 wards scored in well under a millisecond.
+	const results = useMemo<ReadonlyArray<WardHit> | undefined>(
+		() => (tree && query.trim().length >= 2 ? searchWards(tree, query) : undefined),
+		[tree, query],
+	);
 
 	const county = byCode(tree?.counties, codes.county);
 	const constituency = byCode(county?.children, codes.constituency);
 	const ward = byCode(constituency?.children, codes.ward);
-	const options = (nodes: ReadonlyArray<TreeNode> | undefined) =>
+	const options = (nodes: ReadonlyArray<Area> | undefined) =>
 		(nodes ?? []).map((n) => ({ value: String(n.code), label: n.name }));
 
 	const choice = useMemo<WardChoice | undefined>(
@@ -97,15 +88,13 @@ export function WardStep({
 		[ward, constituency, county],
 	);
 
-	const pick = (r: SearchResult) => {
-		if (!r.constituency || !r.county) return;
+	const pick = (r: WardHit) => {
 		setCodes({
 			county: String(r.county.code),
 			constituency: String(r.constituency.code),
 			ward: String(r.code),
 		});
 		setQuery("");
-		setResults(undefined);
 		setError(false);
 	};
 
@@ -157,9 +146,12 @@ export function WardStep({
 				<legend className="mb-2 text-small font-medium text-muted">{t("join.ward.or")}</legend>
 				{!tree && !loadError && <Spinner label={t("join.ward.loading")} />}
 				{loadError && (
-					<p role="alert" className="text-small text-danger">
-						{loadError}
-					</p>
+					<div role="alert" className="flex flex-col items-start gap-2">
+						<p className="text-small text-danger">{loadError}</p>
+						<Button type="button" variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+							{t("common.retry")}
+						</Button>
+					</div>
 				)}
 				{tree && (
 					<>

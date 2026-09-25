@@ -127,3 +127,22 @@
 	--text-small: 17px;
 	--text-micro: 15px;
 }
+
+/* Feed media: never taller than about half a laptop screen or 65% of a phone's. */
+@utility max-h-media {
+	max-height: min(30rem, 65vh);
+}
+
+/* Feed cards off screen skip layout and paint until scrolled near. */
+@utility feed-card-lazy {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 24rem;
+}
+
+/* Sideways scrollers (level tabs) without a visible scrollbar. */
+@utility scrollbar-none {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}

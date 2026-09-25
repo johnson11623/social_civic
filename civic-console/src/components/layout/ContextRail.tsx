@@ -1,8 +1,8 @@
 import type { ChannelList } from "@/api/api-contract";
+import { SponsoredCard } from "@/components/civic/SponsoredCard";
 import { LEVELS, LevelIndicator } from "@/components/ui/LevelIndicator";
 import { formatNumber } from "@/lib/format";
 import { useT } from "@/lib/i18n/I18nProvider";
-import { translate } from "@/lib/i18n/messages";
 
 /**
  * The right-hand column on wide screens: a sponsored slot and context about
@@ -12,34 +12,10 @@ import { translate } from "@/lib/i18n/messages";
 export default function ContextRail({ channels }: { channels: ChannelList | undefined }) {
 	return (
 		<div className="flex flex-col gap-4 py-6">
-			<SponsoredSlot />
+			<SponsoredCard />
 			{channels?.ward && <WardGlance channels={channels} />}
 			<HowPostsRise />
 		</div>
-	);
-}
-
-/**
- * Advertising space. Platform rules: always labelled Sponsored in both
- * languages, targeted by area only (no profiling), never ranked with posts.
- * Until sponsor campaigns exist (EPIC 5 / W3.2) it carries a house message.
- * Fixed height, so a campaign arriving later can't shift the column.
- */
-function SponsoredSlot() {
-	const { t } = useT();
-	return (
-		<section
-			aria-labelledby="rail-sponsored"
-			className="flex min-h-56 flex-col gap-2 rounded-md bg-sponsored p-4"
-		>
-			<p id="rail-sponsored" className="text-micro uppercase tracking-wide text-muted">
-				<span lang="en">{translate("en", "sponsored.heading")}</span>
-				{" · "}
-				<span lang="sw">{translate("sw", "sponsored.heading")}</span>
-			</p>
-			<h2 className="text-h2 text-ink">{t("rail.houseTitle")}</h2>
-			<p className="text-small text-ink">{t("rail.houseBody")}</p>
-		</section>
 	);
 }
 

@@ -33,6 +33,13 @@ export default defineConfig({
 				target: `http://localhost:${process.env.S3_PORT ?? "19000"}`,
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/s3/, ""),
+				// Tunnels (ngrok) add X-Forwarded-Host, which storage would sign-check
+				// instead of its own host: drop them so the signature holds.
+				configure: (proxy) =>
+					proxy.on("proxyReq", (req) => {
+						for (const h of ["x-forwarded-host", "x-forwarded-proto", "x-forwarded-port", "x-forwarded-for", "forwarded"])
+							req.removeHeader(h);
+					}),
 			},
 		},
 	},

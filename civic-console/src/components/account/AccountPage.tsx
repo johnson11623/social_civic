@@ -237,7 +237,7 @@ function ProfilePhoto({ profile, onSaved }: { profile: Profile; onSaved: (p: Pro
 					<Avatar name={profile.displayName || "?"} src={profile.avatar?.url} size="xl" />
 				)}
 				{progress && (
-					<span className="absolute inset-0 flex items-center justify-center rounded-full bg-kenya-black/60 text-micro font-medium text-paper">
+					<span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60 text-micro font-medium text-white">
 						<span role="status">
 							{progress.stage === "uploading"
 								? t("composer.uploading", { percent: Math.round(progress.fraction * 100) })

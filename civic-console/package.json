@@ -16,7 +16,8 @@
 		"format": "biome format --write",
 		"check": "biome check",
 		"check:fix": "biome check --write",
-		"ci": "biome ci && pnpm typecheck && pnpm test && pnpm build"
+		"ci": "biome ci && pnpm typecheck && pnpm test && pnpm build",
+		"gen:boundaries": "node scripts/gen-boundaries.mjs"
 	},
 	"dependencies": {
 		"@effect/platform": "^0.97.2",

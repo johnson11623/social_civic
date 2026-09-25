@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import type { Post } from "@/api/api-contract";
 import { Button } from "@/components/ui/Button";
@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Spinner } from "@/components/ui/Spinner";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { PostCard } from "./PostCard";
+import { SponsoredCard } from "./SponsoredCard";
 
 type Props = {
 	posts: readonly Post[];
@@ -28,6 +29,9 @@ type Props = {
 const AUTO_PAGES = 5;
 /** Fetch the next page this far before the reader reaches the end. */
 const AHEAD = "1200px 0px";
+
+/** The sponsored slot sits after this many posts (or after the last, if fewer). */
+const SPONSORED_AFTER = 2;
 
 /** Data savers choose when to spend data. */
 function autoLoadAllowed(): boolean {
@@ -123,16 +127,21 @@ export function Feed(props: Props) {
 		<div className="flex flex-col gap-4">
 			<div role="feed" aria-busy={props.loadingMore} className="flex flex-col gap-4">
 				{posts.map((post, i) => (
-					<PostCard
-						key={post.postId}
-						post={post}
-						priority={i === 0}
-						pending={props.pendingIds.has(post.postId)}
-						linkThread
-						onLike={props.onLike}
-						onWhy={props.onWhy}
-						onReport={props.onReport}
-					/>
+					<Fragment key={post.postId}>
+						<PostCard
+							post={post}
+							priority={i === 0}
+							pending={props.pendingIds.has(post.postId)}
+							linkThread
+							onLike={props.onLike}
+							onWhy={props.onWhy}
+							onReport={props.onReport}
+						/>
+						{/* Below xl the right-hand column (and its sponsored slot) isn't shown. */}
+						{i === Math.min(SPONSORED_AFTER, posts.length) - 1 && (
+							<SponsoredCard inFeed className="min-h-0 xl:hidden" />
+						)}
+					</Fragment>
 				))}
 			</div>
 			<div ref={sentinel} aria-hidden="true" />

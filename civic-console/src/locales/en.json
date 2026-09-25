@@ -71,6 +71,7 @@
 	"join.ward.selected": "Selected: {ward}",
 	"join.ward.required": "Choose your ward to continue.",
 	"join.ward.loading": "Loading counties…",
+	"join.ward.loadFailed": "Couldn't load the list of wards. Check your connection and try again.",
 	"join.profile.name": "Your profile",
 	"join.profile.displayName": "Display name",
 	"join.profile.displayNameHint": "Shown on your posts. You can use a nickname.",

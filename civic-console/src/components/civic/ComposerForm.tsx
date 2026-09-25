@@ -254,19 +254,19 @@ export default function ComposerForm({
 					{kind === "image" ? (
 						<img src={preview} alt="" className="max-h-96 w-full object-contain" />
 					) : (
-						<video src={preview} controls muted playsInline className="max-h-96 w-full bg-kenya-black" />
+						<video src={preview} controls muted playsInline className="max-h-96 w-full bg-black" />
 					)}
 					<button
 						type="button"
 						onClick={removeMedia}
 						disabled={busy && progress?.stage === "processing"}
-						className="absolute top-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-kenya-black/70 text-paper hover:bg-kenya-black focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent"
+						className="absolute top-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent"
 					>
 						<XIcon className="h-5 w-5" />
 						<span className="sr-only">{t("composer.remove")}</span>
 					</button>
 					{progress && (
-						<div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-kenya-black/70 px-3 py-2 text-small text-paper">
+						<div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-black/70 px-3 py-2 text-small text-white">
 							<p role="status">
 								{progress.stage === "uploading"
 									? t("composer.uploading", { percent: Math.round(progress.fraction * 100) })

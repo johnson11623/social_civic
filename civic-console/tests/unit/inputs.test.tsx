@@ -20,19 +20,21 @@ describe("NationalIdInput", () => {
 		const input = await screen.findByLabelText("National ID number");
 		const toggle = screen.getByRole("button", { name: "Show national ID number" });
 
-		expect(input).toHaveAttribute("type", "password");
+		// Masked with CSS on a text field: no browser offer to save a password.
+		expect(input).toHaveAttribute("type", "text");
+		expect(input).toHaveAttribute("data-masked", "true");
 		expect(toggle).toHaveAttribute("aria-pressed", "false");
 
 		await userEvent.type(input, "12a34 5678");
 		expect(input).toHaveValue("12345678");
 
 		await userEvent.click(toggle);
-		expect(input).toHaveAttribute("type", "text");
+		expect(input).not.toHaveAttribute("data-masked");
 		expect(toggle).toHaveAttribute("aria-pressed", "true");
 		expect(input).toHaveValue("12345678");
 
 		await userEvent.click(toggle);
-		expect(input).toHaveAttribute("type", "password");
+		expect(input).toHaveAttribute("data-masked", "true");
 	});
 
 	it("works from the keyboard and keeps a 44px target", async () => {

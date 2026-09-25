@@ -97,7 +97,16 @@ up() {
 	else
 		warn "ffmpeg not found: photos and videos won't be processed (brew install ffmpeg, or make media-worker for the container)."
 	fi
-	start web "cd civic-console && pnpm dev"
+	if [ "${WEB_MODE:-dev}" = "preview" ]; then
+		# Production bundles (few, compressed, cached files): much faster first
+		# loads for people reaching this machine over a tunnel or the LAN. No
+		# hot reload: run `make dev-share` again after changing the web app.
+		say "Building the web app for sharing…"
+		(cd civic-console && pnpm build >"$LOGS/web-build.log" 2>&1) || { tail -20 "$LOGS/web-build.log"; fail "The web build failed (see .dev/logs/web-build.log)."; }
+		start web "cd civic-console && pnpm preview --port 3000 --strictPort"
+	else
+		start web "cd civic-console && pnpm dev"
+	fi
 
 	say "Waiting for the API…"
 	wait_for api 60 curl -sf "$API_URL/v1/health" || { tail -20 "$LOGS/api.log"; fail "The API didn't come up (see .dev/logs/api.log)."; }

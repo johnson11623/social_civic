@@ -40,7 +40,7 @@ N ?= 1
 .PHONY: help db-up db-down db-reset db-logs db-ps db-psql db-url \
         migrate-up migrate-down migrate-down-all migrate-version migrate-force migrate-create \
         test-db test-db-up test-db-run test-db-down test-db-psql \
-        dev dev-stop dev-status dev-logs db-seed admin-grant media-up media-worker test-media media-down media-reset run-api run-worker kafka-up redis-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
+        dev dev-share dev-stop dev-status dev-logs db-seed admin-grant media-up media-worker test-media media-down media-reset run-api run-worker kafka-up redis-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
 
 # Development-only secrets for run-api. Production uses KMS/Vault (T-X.4).
 DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
@@ -192,6 +192,9 @@ run-worker: db-up migrate-up kafka-up ## Run the outbox relay (publishes events 
 # ---- One command for everything ------------------------------------------------
 dev: ## Start EVERYTHING (infra, API, workers, web) in the background and open the app
 	@API_ENV='$(API_ENV)' MEDIA_WORKER_ENV='$(MEDIA_WORKER_ENV)' HOST_DB_URL='$(HOST_DB_URL)' KAFKA_PORT=$(KAFKA_PORT) ./scripts/dev.sh up
+
+dev-share: ## Like `make dev`, with the web app built for production: fast for others over ngrok or the LAN (no hot reload)
+	@WEB_MODE=preview API_ENV='$(API_ENV)' MEDIA_WORKER_ENV='$(MEDIA_WORKER_ENV)' HOST_DB_URL='$(HOST_DB_URL)' KAFKA_PORT=$(KAFKA_PORT) ./scripts/dev.sh up
 
 dev-stop: ## Stop what `make dev` started (containers and data are kept)
 	@./scripts/dev.sh stop

@@ -97,7 +97,7 @@ async function throughProfile(u: ReturnType<typeof user>) {
 
 	// Identity: ID masked; invalid input stops, valid continues.
 	const id = await screen.findByLabelText("National ID number");
-	expect(id).toHaveAttribute("type", "password");
+	expect(id).toHaveAttribute("data-masked", "true");
 	await u.type(id, "1234 5678");
 	await u.type(screen.getByLabelText("Mobile number"), "0712 345 678");
 	await u.click(screen.getByRole("button", { name: "Continue" }));
@@ -203,23 +203,7 @@ describe("registration wizard (W1.3.1)", () => {
 		expect(api.auth.register).not.toHaveBeenCalled();
 	});
 
-	it("finds a ward by search and fills the cascade", async () => {
-		api.boundary.search.mockReturnValue(
-			Effect.succeed({
-				query: "kiamwngi",
-				items: [
-					{
-						level: "ward",
-						code: 551,
-						iebcCode: "0551",
-						name: "Kiamwangi",
-						label: "Kiamwangi, Gatundu South, Kiambu",
-						constituency: { level: "constituency", code: 111, iebcCode: "111", name: "Gatundu South" },
-						county: { level: "county", code: 22, iebcCode: "022", name: "Kiambu" },
-					},
-				],
-			}),
-		);
+	it("finds a ward by search, instantly and without a request, and fills the cascade", async () => {
 		mount("/join", JoinRoute.options.component as () => React.ReactNode);
 		const u = user();
 		await u.click(await screen.findByRole("checkbox"));
@@ -229,13 +213,14 @@ describe("registration wizard (W1.3.1)", () => {
 		await u.click(screen.getByRole("button", { name: "Continue" }));
 
 		await screen.findByLabelText("County");
+		// A typo still finds it (IEBC 2022 data shipped with the app).
 		await u.type(screen.getByLabelText("Search for your ward"), "kiamwngi");
 		await u.click(await screen.findByRole("button", { name: "Kiamwangi, Gatundu South, Kiambu" }));
+		expect(screen.getByLabelText("County")).toHaveValue("22");
 		expect(screen.getByLabelText("Ward")).toHaveValue("551");
 		expect(screen.getByText("Selected: Kiamwangi, Gatundu South, Kiambu")).toBeInTheDocument();
-		expect(api.boundary.search).toHaveBeenLastCalledWith({
-			urlParams: { q: "kiamwngi", level: "ward", limit: 8 },
-		});
+		expect(api.boundary.search).not.toHaveBeenCalled();
+		expect(api.boundary.tree).not.toHaveBeenCalled();
 	});
 
 	it("explains why we ask in a dialog, with the sign-language slot", async () => {
@@ -256,7 +241,9 @@ describe("login (T-W1.3.2.1)", () => {
 		await u.type(await screen.findByLabelText("National ID number"), "12345678");
 		// The ID can be viewed before sending, as on the registration form.
 		await u.click(screen.getByRole("button", { name: "Show national ID number" }));
+		// Masked with CSS, never type="password" (no browser "save password" prompt).
 		expect(screen.getByLabelText("National ID number")).toHaveAttribute("type", "text");
+		expect(screen.getByLabelText("National ID number")).not.toHaveAttribute("data-masked");
 		await u.click(screen.getByRole("button", { name: "Send code" }));
 		await u.type(await screen.findByLabelText("6-digit code"), "654321");
 		await u.click(screen.getByRole("button", { name: "Verify and continue" }));

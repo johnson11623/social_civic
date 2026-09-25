@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { EyeIcon, EyeOffIcon } from "@/components/ui/icons";
 import { useT } from "@/lib/i18n/I18nProvider";
@@ -14,7 +14,9 @@ type Props = {
 /**
  * National ID field: masked by default, with an eye toggle inside the field
  * to view or hide what was typed. Numeric keypad, digits only, never
- * autofilled. The toggle keeps one accessible name and reports its state
+ * autofilled. Masked with CSS on a text field, not type="password": there is
+ * no password in this app, and a password field makes browsers offer to
+ * save one. The toggle keeps one accessible name and reports its state
  * with aria-pressed, so screen readers hear "Show national ID number,
  * toggle button, pressed/not pressed".
  */
@@ -26,9 +28,15 @@ export function NationalIdInput({ value, onChange, error, hint }: Props) {
 			label={t("join.identity.id")}
 			hint={hint}
 			error={error}
-			type={visible ? "text" : "password"}
+			type="text"
 			inputMode="numeric"
 			autoComplete="off"
+			data-masked={visible ? undefined : "true"}
+			// Password managers: this is not a credential field.
+			data-1p-ignore
+			data-lpignore="true"
+			data-form-type="other"
+			style={{ WebkitTextSecurity: visible ? "none" : "disc" } as CSSProperties}
 			autoCorrect="off"
 			spellCheck={false}
 			maxLength={8}

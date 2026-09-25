@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useRef } from "react";
+import { type KeyboardEvent, useEffect, useRef } from "react";
 
 import type { Level } from "@/api/api-contract";
 import { LEVELS, LevelIndicator } from "@/components/ui/LevelIndicator";
@@ -16,12 +16,17 @@ export const tabId = (level: Level) => `level-tab-${level}`;
 
 /**
  * T-W1.4.1.1 — Ward / Constituency / County / National tabs (WAI-ARIA tabs:
- * one tab in the tab order, arrows/Home/End move and select). Four equal
- * segments that always fit: on phones the dots sit above a smaller label.
+ * one tab in the tab order, arrows/Home/End move and select). Horizontal
+ * pills that scroll sideways on narrow screens, with the scrollbar hidden.
  */
 export function LevelTabs({ value, onChange, panelId }: Props) {
 	const { t } = useT();
 	const refs = useRef(new Map<Level, HTMLButtonElement>());
+
+	// No scrollbar to show there's more: keep the selected tab in view.
+	useEffect(() => {
+		refs.current.get(value)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+	}, [value]);
 
 	const move = (e: KeyboardEvent, index: number) => {
 		const last = LEVELS.length - 1;
@@ -37,7 +42,7 @@ export function LevelTabs({ value, onChange, panelId }: Props) {
 		<div
 			role="tablist"
 			aria-label={t("feed.tabs")}
-			className="grid grid-cols-4 gap-1 rounded-full border border-border bg-surface-2 p-1"
+			className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none"
 		>
 			{LEVELS.map((level, i) => {
 				const selected = level === value;
@@ -57,16 +62,17 @@ export function LevelTabs({ value, onChange, panelId }: Props) {
 						onClick={() => onChange(level)}
 						onKeyDown={(e) => move(e, i)}
 						className={cn(
-							"flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-full px-1 text-micro font-medium",
-							"sm:flex-row sm:gap-2 sm:px-3 sm:text-small",
+							"inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-4 text-small font-medium",
 							"focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent",
-							selected ? "bg-kenya-green text-on-accent" : "text-ink hover:bg-paper",
+							selected
+								? "border-kenya-green bg-kenya-green text-on-accent"
+								: "border-border bg-paper text-ink hover:bg-surface-2",
 						)}
 					>
 						<span aria-hidden="true" className="inline-flex">
 							<LevelIndicator current={level} inverse={selected} />
 						</span>
-						<span className="max-w-full truncate">{t(`level.${level}`)}</span>
+						{t(`level.${level}`)}
 					</button>
 				);
 			})}

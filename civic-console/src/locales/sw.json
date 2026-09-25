@@ -71,6 +71,7 @@
 	"join.ward.selected": "Umechagua: {ward}",
 	"join.ward.required": "Chagua wadi yako ili kuendelea.",
 	"join.ward.loading": "Inapakia kaunti…",
+	"join.ward.loadFailed": "Imeshindwa kupakia orodha ya wadi. Angalia muunganisho wako kisha ujaribu tena.",
 	"join.profile.name": "Wasifu wako",
 	"join.profile.displayName": "Jina la kuonyeshwa",
 	"join.profile.displayNameHint": "Linaonyeshwa kwenye machapisho yako. Unaweza kutumia jina la utani.",

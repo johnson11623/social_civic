@@ -4,6 +4,7 @@ import type { Post } from "@/api/api-contract";
 import { Avatar } from "@/components/ui/Avatar";
 import { LevelIndicator } from "@/components/ui/LevelIndicator";
 import { cn } from "@/lib/cn";
+import { FEATURES } from "@/lib/features";
 import { formatDate, formatRelative } from "@/lib/format";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { ElevationBanner } from "./ElevationBanner";
@@ -73,7 +74,7 @@ export const PostCard = memo(function PostCard({
 			className={cn(
 				"flex flex-col gap-3 rounded-md border border-border bg-paper p-4",
 				// Off-screen cards skip layout and paint until scrolled near.
-				linkThread && "[contain-intrinsic-size:auto_24rem] [content-visibility:auto]",
+				linkThread && "feed-card-lazy",
 				post.sponsored && "border-sponsored",
 				pending && "opacity-70",
 			)}
@@ -114,7 +115,7 @@ export const PostCard = memo(function PostCard({
 				trailing={
 					pending ? undefined : (
 						<div className="flex items-center">
-							{post.level === "ward" && (
+							{FEATURES.whyAmISeeing && post.level === "ward" && (
 								<button
 									type="button"
 									onClick={() => onWhy(post)}

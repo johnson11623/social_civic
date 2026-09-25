@@ -68,7 +68,7 @@ function Frame({
 		// Height is also capped (about half a laptop screen, 65% of a phone's),
 		// so one post never takes over the feed; the rest shows as bars.
 		<div
-			className="relative max-h-[min(30rem,65vh)] w-full overflow-hidden rounded-md bg-surface-2"
+			className="relative max-h-media w-full overflow-hidden rounded-md bg-surface-2"
 			style={{ aspectRatio: String(ratio) } as CSSProperties}
 		>
 			{backdrop && (
@@ -152,6 +152,7 @@ type NetworkInfo = { saveData?: boolean; effectiveType?: string };
 export function canAutoplay(): boolean {
 	if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") return false;
 	if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return false;
+	if (document.documentElement.dataset.motion === "reduce") return false; // account setting
 	const net = (navigator as Navigator & { connection?: NetworkInfo }).connection;
 	return !(net?.saveData || /(^|-)2g$/.test(net?.effectiveType ?? ""));
 }
@@ -288,7 +289,7 @@ function VideoPlayer({ media, label }: { media: Media; label: string }) {
 	}
 
 	const chip =
-		"inline-flex h-9 min-w-9 items-center justify-center rounded-full bg-kenya-black/70 px-2 text-micro font-medium text-paper hover:bg-kenya-black focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent";
+		"inline-flex h-9 min-w-9 items-center justify-center rounded-full bg-black/70 px-2 text-micro font-medium text-white hover:bg-black focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent";
 
 	return (
 		<div ref={wrap}>
@@ -335,7 +336,7 @@ function VideoPlayer({ media, label }: { media: Media; label: string }) {
 								</button>
 								<span className="flex items-center gap-2">
 									{left > 0 && (
-										<span className="rounded-full bg-kenya-black/70 px-2 py-1 text-micro tabular-nums text-paper">
+										<span className="rounded-full bg-black/70 px-2 py-1 text-micro tabular-nums text-white">
 											{clock(left)}
 										</span>
 									)}
@@ -364,16 +365,16 @@ function VideoPlayer({ media, label }: { media: Media; label: string }) {
 								void play({ withSound: true });
 							}}
 							aria-label={t("media.play", { alt: label })}
-							className="absolute inset-0 flex items-center justify-center bg-kenya-black/20 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-accent"
+							className="absolute inset-0 flex items-center justify-center bg-black/20 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-accent"
 						>
 							<span
 								aria-hidden="true"
-								className="flex h-16 w-16 items-center justify-center rounded-full bg-paper/90 text-h1 text-ink"
+								className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 text-h1 text-black"
 							>
 								▶
 							</span>
 							{left > 0 && (
-								<span className="absolute right-2 bottom-3 rounded-full bg-kenya-black/70 px-2 py-1 text-micro tabular-nums text-paper">
+								<span className="absolute right-2 bottom-3 rounded-full bg-black/70 px-2 py-1 text-micro tabular-nums text-white">
 									{clock(left)}
 								</span>
 							)}

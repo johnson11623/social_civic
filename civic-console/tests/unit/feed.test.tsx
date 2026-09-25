@@ -73,6 +73,15 @@ const channels: Channel[] = [
 	},
 ];
 
+// Post cards only (the feed also carries the sponsored slot, an article too).
+const postArticles = () =>
+	screen.getAllByRole("article").filter((a) => !a.hasAttribute("data-sponsored-slot"));
+const onlyPost = () => {
+	const [only, ...rest] = postArticles();
+	if (!only || rest.length) throw new Error(`expected one post, found ${rest.length + (only ? 1 : 0)}`);
+	return only;
+};
+
 const page = (items: Post[], more?: string): FeedPage => ({
 	items,
 	hasMore: more !== undefined,
@@ -168,7 +177,7 @@ describe("Feed pagination (T-W1.4.1.2)", () => {
 		expect(api.posts.feed).toHaveBeenCalledWith({
 			urlParams: { level: "ward", limit: 20, cursor: "cursor-1" },
 		});
-		expect(screen.getAllByRole("article")).toHaveLength(3);
+		expect(postArticles()).toHaveLength(3);
 		expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
 		expect(screen.getByText("You're all caught up.")).toBeInTheDocument();
 	});
@@ -236,7 +245,7 @@ describe("loading as you scroll", () => {
 describe("PostCard (T-W1.4.1.3–T-W1.4.1.5)", () => {
 	it("renders author, channel, content and counts", async () => {
 		await renderHome([post({ content: "Water point broken", counts: { likes: 42, replies: 8 } })]);
-		const card = screen.getByRole("article");
+		const card = onlyPost();
 		expect(within(card).getByText("Water point broken")).toBeInTheDocument();
 		expect(within(card).getByText(/#general/)).toBeInTheDocument();
 		expect(within(card).getByRole("button", { name: "Like 42", pressed: false })).toBeInTheDocument();
@@ -259,29 +268,15 @@ describe("PostCard (T-W1.4.1.3–T-W1.4.1.5)", () => {
 		expect(note).toHaveTextContent("Ujumbe wa kiraia uliofadhiliwa");
 	});
 
-	it("explains elevated posts in a modal (T-W1.4.1.5)", async () => {
-		const user = userEvent.setup();
-		await renderHome([post({ level: "constituency", score: 143.7, counts: { likes: 42, replies: 8 } })]);
+	it("hides 'Why am I seeing this?' for now, keeping the elevation note", async () => {
+		await renderHome([post({ level: "constituency" }), post()]);
 		expect(screen.getByText("Elevated from Ward to Constituency")).toBeInTheDocument();
-		await user.click(screen.getByRole("button", { name: "Why am I seeing this?" }));
-		const dialog = await screen.findByRole("dialog", { name: "Why you're seeing this" });
-		expect(dialog).toHaveTextContent("143.7");
-		expect(dialog).toHaveTextContent("42 likes · 8 replies");
-		expect(dialog).toHaveTextContent(
-			/elevated from Ward to Constituency because its relevance score exceeded/,
-		);
-	});
-
-	it("explains ward posts too, in Kiswahili", async () => {
-		const user = userEvent.setup();
-		await renderHome([post()], { lang: "sw" });
-		await user.click(screen.getByRole("button", { name: "Kwa nini naona hili?" }));
-		expect(await screen.findByRole("dialog")).toHaveTextContent(/Chapisho hili ni la wadi yako/);
+		expect(screen.queryByRole("button", { name: "Why am I seeing this?" })).toBeNull();
 	});
 
 	it("keeps a removed post's place with a notice and no content", async () => {
 		await renderHome([post({ state: "tombstoned", content: null })]);
-		expect(screen.getByRole("article")).toHaveTextContent("This post was removed by a moderator.");
+		expect(onlyPost()).toHaveTextContent("This post was removed by a moderator.");
 		expect(screen.queryByRole("button", { name: /Like/ })).toBeNull();
 	});
 
@@ -330,12 +325,20 @@ describe("Optimistic likes (T-W1.4.1.6)", () => {
 			b: avatarRenders.get(b.author?.displayName ?? ""),
 		};
 
-		await user.click(
-			within(screen.getAllByRole("article")[0] as HTMLElement).getByRole("button", { name: "Like 2" }),
-		);
+		await user.click(within(postArticles()[0] as HTMLElement).getByRole("button", { name: "Like 2" }));
 		await screen.findByRole("button", { name: "Like 3", pressed: true });
 		expect(avatarRenders.get(b.author?.displayName ?? "")).toBe(before.b);
 		expect(avatarRenders.get(a.author?.displayName ?? "")).toBeGreaterThan(before.a ?? 0);
+	});
+});
+
+describe("sponsored slot in the feed", () => {
+	it("sits after the second post, labelled in both languages", async () => {
+		await renderHome([post({ content: "One" }), post({ content: "Two" }), post({ content: "Three" })]);
+		const all = screen.getAllByRole("article");
+		expect(all.map((a) => a.hasAttribute("data-sponsored-slot"))).toEqual([false, false, true, false]);
+		expect(all[2]).toHaveTextContent("Sponsored · Limefadhiliwa");
+		expect(all[2]).toHaveClass("xl:hidden"); // the right-hand column has it on wide screens
 	});
 });
 
@@ -405,7 +408,7 @@ describe("Composer (W1.4.2)", () => {
 		await user.type(screen.getByRole("textbox"), "  Borehole fixed today  ");
 		await user.click(screen.getByRole("button", { name: "Post" }));
 
-		const [top] = screen.getAllByRole("article");
+		const [top] = postArticles();
 		expect(top).toHaveTextContent("Borehole fixed today");
 		expect(top).toHaveTextContent("Posting…");
 		expect(top).toHaveAttribute("aria-busy", "true");
@@ -419,8 +422,8 @@ describe("Composer (W1.4.2)", () => {
 				post({ postId: "server-1", channelId: "c-water", channel: "water", content: "Borehole fixed today" }),
 			),
 		);
-		await waitFor(() => expect(screen.getAllByRole("article")[0]).not.toHaveTextContent("Posting…"));
-		expect(screen.getAllByRole("article")).toHaveLength(2);
+		await waitFor(() => expect(postArticles()[0]).not.toHaveTextContent("Posting…"));
+		expect(postArticles()).toHaveLength(2);
 		expect(localStorage.getItem(LAST_CHANNEL_KEY)).toBe("c-water");
 		expect(screen.queryByRole("textbox")).toBeNull(); // composer closed
 	});
@@ -436,7 +439,7 @@ describe("Composer (W1.4.2)", () => {
 		expect(await screen.findByRole("alert")).toHaveTextContent(
 			/Your post wasn't published\. Too many attempts/,
 		);
-		expect(screen.getAllByRole("article")).toHaveLength(1);
+		expect(postArticles()).toHaveLength(1);
 		expect(screen.getByRole("textbox")).toHaveValue("Eleventh post this minute");
 	});
 });
