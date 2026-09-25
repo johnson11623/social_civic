@@ -15,6 +15,16 @@ export default defineConfig({
 		tanstackStart({ srcDirectory: "src", router: { routesDirectory: "routes" } }),
 		viteReact(),
 	],
+	// Dev server only: allow ngrok tunnels (testing on a phone); a leading dot
+	// matches any subdomain. Extra hosts: VITE_ALLOWED_HOSTS=a.example,b.example
+	server: {
+		allowedHosts: [
+			".ngrok-free.dev",
+			".ngrok-free.app",
+			".ngrok.app",
+			...(process.env.VITE_ALLOWED_HOSTS?.split(",").filter(Boolean) ?? []),
+		],
+	},
 	build: {
 		rolldownOptions: {
 			output: {
