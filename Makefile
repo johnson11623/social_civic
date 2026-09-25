@@ -35,7 +35,7 @@ N ?= 1
 .PHONY: help db-up db-down db-reset db-logs db-ps db-psql db-url \
         migrate-up migrate-down migrate-down-all migrate-version migrate-force migrate-create \
         test-db test-db-up test-db-run test-db-down test-db-psql \
-        db-seed admin-grant media-up media-down media-reset run-api run-worker kafka-up redis-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
+        dev dev-stop dev-status dev-logs db-seed admin-grant media-up media-worker test-media media-down media-reset run-api run-worker kafka-up redis-up test-api build test test-integration test-all sqlc-generate sqlc-check fmt vet
 
 # Development-only secrets for run-api. Production uses KMS/Vault (T-X.4).
 DEV_JWT_SIGNING_KEY      ?= dev-only-jwt-signing-key-change-me-0123456789
@@ -128,15 +128,25 @@ db-seed: ## Load reference data (IEBC counties, constituencies, wards) into the 
 admin-grant: ## Grant a platform role in the dev database: make admin-grant USER_ID=<public id> ROLE=sysadmin
 	go run ./cmd/admin -database "$(HOST_DB_URL)" -user "$(USER_ID)" -role "$(or $(ROLE),sysadmin)"
 
-run-api: db-up migrate-up db-seed redis-up ## Run the API against the dev database (dev-only secrets)
-	DATABASE_URL="$(HOST_DB_URL)" \
+# Environment for the API in development (dev-only secrets).
+API_ENV = DATABASE_URL="$(HOST_DB_URL)" \
 	REDIS_URL="redis://localhost:$(REDIS_PORT)/0" \
 	RATE_LIMIT_KEY="$(DEV_RATE_LIMIT_KEY)" \
 	FEED_SIGNING_KEY="$(DEV_FEED_SIGNING_KEY)" \
+	S3_ENDPOINT="localhost:$(S3_PORT)" S3_ACCESS_KEY=civicdev S3_SECRET_KEY=civicdev-secret-change-me \
+	MEDIA_CDN_URL="http://localhost:$(MEDIA_CDN_PORT)/media/variants" \
 	PII_ENCRYPTION_KEY="$(DEV_PII_ENCRYPTION_KEY)" \
 	JWT_SIGNING_KEY="$(DEV_JWT_SIGNING_KEY)" \
-	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)" \
-	go run ./cmd/api
+	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)"
+
+# Environment for the media worker on the host (Homebrew ffmpeg; JPEG-only
+# variants without libwebp — the container has WebP).
+MEDIA_WORKER_ENV = DATABASE_URL="$(HOST_DB_URL)" KAFKA_BROKERS="localhost:$(KAFKA_PORT)" \
+	S3_ENDPOINT="localhost:$(S3_PORT)" S3_ACCESS_KEY=civicdev S3_SECRET_KEY=civicdev-secret-change-me \
+	MEDIA_VIDEO_RENDITIONS="240p,480p"
+
+run-api: db-up migrate-up db-seed redis-up ## Run the API against the dev database (dev-only secrets)
+	$(API_ENV) go run ./cmd/api
 
 redis-up: ## Start Redis (cache, rate limits) on localhost:$(REDIS_PORT)
 	$(COMPOSE) up -d --wait redis
@@ -146,11 +156,22 @@ media-up: ## Start media storage (SeaweedFS S3) and the local CDN (Caddy); the A
 	@echo "S3 API    http://localhost:$(S3_PORT)  (civicdev / civicdev-secret-change-me)"
 	@echo "Media CDN http://localhost:$(MEDIA_CDN_PORT)/media/variants/…"
 
+media-worker: db-up migrate-up kafka-up media-up ## Run the media worker (Go + ffmpeg in a container); needs `make run-worker` for the outbox
+	$(COMPOSE) --profile media up -d --build mediaworker
+	@echo "Logs: docker compose logs -f mediaworker"
+
+test-media: test-db-down test-db-up media-up ## Media tests with real ffmpeg, PostgreSQL and S3, inside the worker container
+	@status=0; $(MIGRATE_TEST) up && \
+	$(COMPOSE) --profile media --profile test run --rm --build \
+		-e TEST_DATABASE_URL="$(TEST_DB_URL)" -e TEST_S3_ENDPOINT=seaweedfs:8333 \
+		mediaworker go test -count=1 ./internal/media/ || status=$$?; \
+	$(MAKE) test-db-down; exit $$status
+
 media-down: ## Stop media services (stored media is kept)
-	$(COMPOSE) --profile media stop seaweedfs caddy
+	$(COMPOSE) --profile media stop mediaworker seaweedfs caddy
 
 media-reset: ## DESTRUCTIVE: delete all stored media
-	$(COMPOSE) --profile media rm -sf seaweedfs caddy
+	$(COMPOSE) --profile media rm -sf mediaworker seaweedfs caddy
 	docker volume rm -f civic_seaweeddata
 	$(MAKE) media-up
 
@@ -159,6 +180,19 @@ kafka-up: ## Start the dev event bus (Redpanda, Kafka API on localhost:$(KAFKA_P
 
 run-worker: db-up migrate-up kafka-up ## Run the outbox relay (publishes events to Kafka)
 	DATABASE_URL="$(HOST_DB_URL)" KAFKA_BROKERS="localhost:$(KAFKA_PORT)" go run ./cmd/worker
+
+# ---- One command for everything ------------------------------------------------
+dev: ## Start EVERYTHING (infra, API, workers, web) in the background and open the app
+	@API_ENV='$(API_ENV)' MEDIA_WORKER_ENV='$(MEDIA_WORKER_ENV)' HOST_DB_URL='$(HOST_DB_URL)' KAFKA_PORT=$(KAFKA_PORT) ./scripts/dev.sh up
+
+dev-stop: ## Stop what `make dev` started (containers and data are kept)
+	@./scripts/dev.sh stop
+
+dev-status: ## Show what's running and whether it's healthy
+	@./scripts/dev.sh status
+
+dev-logs: ## Follow the logs of everything `make dev` started
+	@./scripts/dev.sh logs
 
 test-api: ## Run the Postman collection with Newman against a running API (make run-api)
 	docker run --rm -v "$(CURDIR)/api/postman":/etc/newman postman/newman:6-alpine \

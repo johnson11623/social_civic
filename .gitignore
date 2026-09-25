@@ -4,3 +4,6 @@ docs/
 !.env.example
 bin/
 .DS_Store
+
+# make dev: logs and process ids
+.dev/

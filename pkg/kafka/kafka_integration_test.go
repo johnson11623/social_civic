@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +45,7 @@ func TestEnsureTopicsIsIdempotent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	topic := "test.ensure." + uuid.NewString()
+	t.Cleanup(func() { deleteTopic(t, brokers[0], topic) })
 	for i := 0; i < 2; i++ {
 		if err := EnsureTopics(ctx, brokers[0], []Topic{{Name: topic, Partitions: 3, ReplicationFactor: 1}}); err != nil {
 			t.Fatalf("run %d: %v", i+1, err)
@@ -77,6 +80,7 @@ func TestOutboxToKafkaEndToEnd(t *testing.T) {
 	defer cancel()
 
 	topic := "test.user.registered." + uuid.NewString()
+	t.Cleanup(func() { deleteTopic(t, brokers[0], topic) })
 	if err := EnsureTopics(ctx, brokers[0], []Topic{{Name: topic, Partitions: 6, ReplicationFactor: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -157,5 +161,31 @@ func TestOutboxToKafkaEndToEnd(t *testing.T) {
 	// Backlog T-1.1.1.7: consumers receive the event within 500ms.
 	if worst > 500*time.Millisecond {
 		t.Errorf("latency %s exceeds the 500ms target", worst)
+	}
+}
+
+// deleteTopic removes a test's topic so repeated runs don't exhaust the
+// broker's partition budget (Redpanda in dev mode has a small one).
+func deleteTopic(t *testing.T, broker, topic string) {
+	t.Helper()
+	conn, err := kgo.Dial("tcp", broker)
+	if err != nil {
+		t.Logf("delete topic %s: %v", topic, err)
+		return
+	}
+	defer conn.Close()
+	controller, err := conn.Controller()
+	if err != nil {
+		t.Logf("delete topic %s: %v", topic, err)
+		return
+	}
+	ctrl, err := kgo.Dial("tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)))
+	if err != nil {
+		t.Logf("delete topic %s: %v", topic, err)
+		return
+	}
+	defer ctrl.Close()
+	if err := ctrl.DeleteTopics(topic); err != nil {
+		t.Logf("delete topic %s: %v", topic, err)
 	}
 }
