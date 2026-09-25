@@ -9,6 +9,7 @@ import { useT } from "@/lib/i18n/I18nProvider";
 import { ElevationBanner } from "./ElevationBanner";
 import { InteractionBar } from "./InteractionBar";
 import { ModerationNotice } from "./ModerationNotice";
+import { PostMedia } from "./PostMedia";
 import { SponsoredLabel } from "./SponsoredLabel";
 
 type Props = {
@@ -94,7 +95,8 @@ export const PostCard = memo(function PostCard({
 			{post.sponsored && post.sponsoredLabel && <SponsoredLabel label={post.sponsoredLabel} />}
 			{post.level !== "ward" && <ElevationBanner level={post.level} onWhy={() => onWhy(post)} />}
 			{notice}
-			<p className="whitespace-pre-wrap break-words text-body text-ink">{post.content}</p>
+			{post.content && <p className="whitespace-pre-wrap break-words text-body text-ink">{post.content}</p>}
+			{post.media && <PostMedia media={post.media} authorName={post.author?.displayName} />}
 			<InteractionBar
 				likes={post.counts.likes}
 				replies={post.counts.replies}

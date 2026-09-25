@@ -258,6 +258,35 @@ export const SponsorLabel = Schema.Struct({ en: Schema.String, sw: Schema.String
 
 export const PostState = Schema.Literal("active", "frozen", "tombstoned");
 
+/** One processed image size: WebP with a JPEG fallback, on the media CDN. */
+export const MediaVariant = Schema.Struct({
+	name: Schema.String,
+	width: Schema.Int,
+	height: Schema.Int,
+	/** Absent when the worker's ffmpeg has no WebP encoder (JPEG only). */
+	webpUrl: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("webp_url")),
+	jpegUrl: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("jpeg_url")),
+});
+export type MediaVariant = typeof MediaVariant.Type;
+
+/** An uploaded image or video and, once processed, its variants (docs/media). */
+export const Media = Schema.Struct({
+	mediaId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("media_id")),
+	kind: Schema.Literal("image", "video"),
+	state: Schema.Literal("uploading", "processing", "ready", "failed"),
+	altText: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("alt_text")),
+	width: Schema.optionalWith(Schema.Int, { exact: true }),
+	height: Schema.optionalWith(Schema.Int, { exact: true }),
+	durationMs: Schema.optionalWith(Schema.Int, { exact: true }).pipe(Schema.fromKey("duration_ms")),
+	/** Tiny blurred data: URI shown while the real image loads. */
+	placeholder: Schema.optionalWith(Schema.String, { exact: true }),
+	images: Schema.optionalWith(Schema.Array(MediaVariant), { exact: true }),
+	poster: Schema.optionalWith(MediaVariant, { exact: true }),
+	hlsUrl: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("hls_url")),
+	error: Schema.optionalWith(Schema.String, { exact: true }),
+});
+export type Media = typeof Media.Type;
+
 export const Post = Schema.Struct({
 	postId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("post_id")),
 	channelId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("channel_id")),
@@ -283,6 +312,7 @@ export const Post = Schema.Struct({
 		}),
 		{ exact: true },
 	),
+	media: Schema.optionalWith(Media, { exact: true }),
 	rootId: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("root_id")),
 	parentId: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("parent_id")),
 	createdAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("created_at")),
@@ -437,7 +467,12 @@ export class PostsGroup extends HttpApiGroup.make("posts")
 	.add(
 		HttpApiEndpoint.post("createPost", "/channels/:channelId/posts")
 			.setPath(Schema.Struct({ channelId: Schema.String }))
-			.setPayload(Schema.Struct({ content: Schema.String.pipe(Schema.maxLength(MAX_POST_LENGTH * 2)) }))
+			.setPayload(
+				Schema.Struct({
+					content: Schema.String.pipe(Schema.maxLength(MAX_POST_LENGTH * 2)),
+					mediaId: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("media_id")),
+				}),
+			)
 			.addSuccess(Post, { status: 201 })
 			.addError(Unauthorized)
 			.addError(ValidationFailed)
@@ -786,6 +821,62 @@ export class AccountGroup extends HttpApiGroup.make("account")
 			.addError(UpstreamError),
 	) {}
 
+// ---- Media uploads (docs/media) ---------------------------------------------------
+
+export const UploadRequest = Schema.Struct({
+	mimeType: Schema.propertySignature(Schema.String.pipe(Schema.maxLength(100))).pipe(
+		Schema.fromKey("mime_type"),
+	),
+	sizeBytes: Schema.propertySignature(Schema.Int.pipe(Schema.positive())).pipe(Schema.fromKey("size_bytes")),
+	altText: Schema.propertySignature(Schema.String.pipe(Schema.maxLength(2000))).pipe(
+		Schema.fromKey("alt_text"),
+	),
+});
+
+export const UploadTicket = Schema.Struct({
+	mediaId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("media_id")),
+	kind: Schema.Literal("image", "video"),
+	upload: Schema.Struct({
+		url: Schema.String,
+		method: Schema.Literal("PUT"),
+		headers: Schema.Record({ key: Schema.String, value: Schema.String }),
+		expiresAt: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("expires_at")),
+	}),
+});
+export type UploadTicket = typeof UploadTicket.Type;
+
+const MediaPath = Schema.Struct({ mediaId: Schema.String });
+
+export class MediaGroup extends HttpApiGroup.make("media")
+	.add(
+		HttpApiEndpoint.post("createUpload", "/media/uploads")
+			.setPayload(UploadRequest)
+			.addSuccess(UploadTicket, { status: 201 })
+			.addError(Unauthorized)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.post("complete", "/media/:mediaId/complete")
+			.setPath(MediaPath)
+			.addSuccess(Media)
+			.addError(Unauthorized)
+			.addError(Conflict)
+			.addError(ValidationFailed)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.get("get", "/media/:mediaId")
+			.setPath(MediaPath)
+			.addSuccess(Media)
+			.addError(Unauthorized)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	) {}
+
 // ---- Contract -----------------------------------------------------------------
 
 export class ApiContract extends HttpApi.make("civic")
@@ -795,4 +886,5 @@ export class ApiContract extends HttpApi.make("civic")
 	.add(PostsGroup)
 	.add(ModerationGroup)
 	.add(AccountGroup)
+	.add(MediaGroup)
 	.prefix("/api") {}

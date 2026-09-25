@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import type { Channel, ChannelPostsPage, Post } from "@/api/api-contract";
+import type { Channel, ChannelPostsPage, Media, Post } from "@/api/api-contract";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { describeError, type Settled, settle } from "@/lib/api-errors";
@@ -67,7 +67,7 @@ export function ChannelView({ channel, posts: initial }: Props) {
 	};
 
 	// T-W2.1.3.3 — the post appears at the top of this channel at once.
-	const submitPost = async (target: Channel, content: string): Promise<string | null> => {
+	const submitPost = async (target: Channel, content: string, media?: Media): Promise<string | null> => {
 		const tempId = `pending-${Date.now()}`;
 		const temp: Post = {
 			postId: tempId,
@@ -81,13 +81,17 @@ export function ChannelView({ channel, posts: initial }: Props) {
 			counts: { likes: 0, replies: 0 },
 			liked: false,
 			sponsored: false,
+			...(media ? { media } : {}),
 			createdAt: new Date().toISOString(),
 		};
 		setPosts((all) => [temp, ...all]);
 		setPendingIds((ids) => new Set(ids).add(tempId));
 		const res = settle(
 			await callApiEither((api) =>
-				api.posts.createPost({ path: { channelId: target.channelId }, payload: { content } }),
+				api.posts.createPost({
+					path: { channelId: target.channelId },
+					payload: { content, ...(media ? { mediaId: media.mediaId } : {}) },
+				}),
 			),
 		);
 		setPendingIds((ids) => {

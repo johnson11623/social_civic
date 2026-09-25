@@ -26,6 +26,7 @@
 		"clsx": "^2.1.1",
 		"effect": "^3.22.2",
 		"effect-tanstack-start": "^0.2.0",
+		"hls.js": "1.6.13",
 		"react": "^19.3.0",
 		"react-dom": "^19.3.0",
 		"tailwind-merge": "^3.7.0",

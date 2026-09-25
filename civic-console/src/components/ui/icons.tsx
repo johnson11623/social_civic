@@ -76,3 +76,31 @@ export function TrendingUpIcon({ className = "h-5 w-5" }: IconProps) {
 		</svg>
 	);
 }
+
+export function ImageIcon({ className = "h-5 w-5" }: IconProps) {
+	return (
+		<svg {...base} aria-hidden="true" className={className}>
+			<rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+			<circle cx="9" cy="9" r="2" />
+			<path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+		</svg>
+	);
+}
+
+export function VideoIcon({ className = "h-5 w-5" }: IconProps) {
+	return (
+		<svg {...base} aria-hidden="true" className={className}>
+			<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+			<rect x="2" y="6" width="14" height="12" rx="2" />
+		</svg>
+	);
+}
+
+export function XIcon({ className = "h-5 w-5" }: IconProps) {
+	return (
+		<svg {...base} aria-hidden="true" className={className}>
+			<path d="M18 6 6 18" />
+			<path d="m6 6 12 12" />
+		</svg>
+	);
+}

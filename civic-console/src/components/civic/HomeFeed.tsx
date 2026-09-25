@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import type { Channel, ChannelList, FeedPage, Level, Post } from "@/api/api-contract";
+import type { Channel, ChannelList, FeedPage, Level, Media, Post } from "@/api/api-contract";
 import { useToast } from "@/components/ui/Toast";
 import { describeError, type Settled, settle } from "@/lib/api-errors";
 import { useT } from "@/lib/i18n/I18nProvider";
@@ -118,7 +118,7 @@ export function HomeFeed({ level: initialLevel, urlLevel, feed, channels, onLeve
 
 	// T-W1.4.2.5 — the post shows at the top of the ward feed straight away,
 	// marked as posting; the server's copy replaces it.
-	const submitPost = async (channel: Channel, content: string): Promise<string | null> => {
+	const submitPost = async (channel: Channel, content: string, media?: Media): Promise<string | null> => {
 		const tempId = `pending-${Date.now()}`;
 		const optimistic = level === "ward";
 		if (optimistic) {
@@ -134,6 +134,7 @@ export function HomeFeed({ level: initialLevel, urlLevel, feed, channels, onLeve
 				counts: { likes: 0, replies: 0 },
 				liked: false,
 				sponsored: false,
+				...(media ? { media } : {}),
 				createdAt: new Date().toISOString(),
 			};
 			setPosts((all) => [temp, ...all]);
@@ -141,7 +142,10 @@ export function HomeFeed({ level: initialLevel, urlLevel, feed, channels, onLeve
 		}
 		const res = settle(
 			await callApiEither((api) =>
-				api.posts.createPost({ path: { channelId: channel.channelId }, payload: { content } }),
+				api.posts.createPost({
+					path: { channelId: channel.channelId },
+					payload: { content, ...(media ? { mediaId: media.mediaId } : {}) },
+				}),
 			),
 		);
 		if (optimistic) {

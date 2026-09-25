@@ -337,3 +337,45 @@ describe("channel creation and views (W2.1)", () => {
 		});
 	});
 });
+
+describe("media uploads", () => {
+	it("creates an upload ticket, completes it, and posts with the media", async () => {
+		const { go, handler } = start((url) => {
+			if (url.pathname === "/v1/media/uploads")
+				return {
+					status: 201,
+					body: {
+						media_id: "m1",
+						kind: "image",
+						upload: {
+							url: "http://s3/o",
+							method: "PUT",
+							headers: { "Content-Type": "image/png" },
+							expires_at: "x",
+						},
+					},
+				};
+			if (url.pathname.endsWith("/complete"))
+				return { status: 200, body: { media_id: "m1", kind: "image", state: "processing", alt_text: "Tap" } };
+			return {
+				status: 201,
+				body: goPost({
+					level: 1,
+					media: { media_id: "m1", kind: "image", state: "ready", alt_text: "Tap", images: [] },
+				}),
+			};
+		});
+		const ticket = await handler(
+			req("POST", "/api/media/uploads", { mime_type: "image/png", size_bytes: 10, alt_text: "Tap" }),
+		);
+		expect(ticket.status).toBe(201);
+		expect(go.seen[0]?.body).toEqual({ mime_type: "image/png", size_bytes: 10, alt_text: "Tap" });
+		expect(await (await handler(req("POST", "/api/media/m1/complete"))).json()).toMatchObject({
+			state: "processing",
+		});
+		const post = await handler(req("POST", "/api/channels/c1/posts", { content: "", media_id: "m1" }));
+		expect(post.status).toBe(201);
+		expect(go.seen[2]?.body).toEqual({ content: "", media_id: "m1" });
+		expect(await post.json()).toMatchObject({ media: { media_id: "m1", kind: "image" } });
+	});
+});

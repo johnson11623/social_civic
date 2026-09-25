@@ -22,6 +22,7 @@ import {
 	Group,
 	History,
 	LikeState,
+	Media,
 	MfaEnrolment,
 	MfaStatus,
 	Post,
@@ -33,6 +34,7 @@ import {
 	type Session,
 	ThreadPage,
 	Unauthorized,
+	UploadTicket,
 	UpstreamError,
 } from "@/api/api-contract";
 import { isLang, LANG_COOKIE } from "@/lib/i18n/lang";
@@ -306,7 +308,7 @@ const PostsLive = HttpApiBuilder.group(ApiContract, "posts", (handlers) =>
 				const backend = yield* Backend;
 				return yield* backend.post(`/v1/channels/${encodeURIComponent(path.channelId)}/posts`, Post, {
 					...(yield* authedContext),
-					body: { content: payload.content },
+					body: { content: payload.content, ...(payload.mediaId ? { media_id: payload.mediaId } : {}) },
 				});
 			}).pipe(
 				Effect.catchTags(
@@ -582,6 +584,47 @@ const AccountLive = HttpApiBuilder.group(ApiContract, "account", (handlers) =>
 		),
 );
 
+const MediaLive = HttpApiBuilder.group(ApiContract, "media", (handlers) =>
+	handlers
+		.handle("createUpload", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post("/v1/media/uploads", UploadTicket, {
+					...(yield* authedContext),
+					body: { mime_type: payload.mimeType, size_bytes: payload.sizeBytes, alt_text: payload.altText },
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "ValidationFailed", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("complete", ({ path }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.post(
+					`/v1/media/${encodeURIComponent(path.mediaId)}/complete`,
+					Media,
+					yield* authedContext,
+				);
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "Conflict", "ValidationFailed", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("get", ({ path }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.get(
+					`/v1/media/${encodeURIComponent(path.mediaId)}`,
+					Media,
+					yield* authedContext,
+				);
+			}).pipe(Effect.catchTags(narrowTo("Unauthorized", "BackendUnavailable", "UpstreamError"))),
+		),
+);
+
 /**
  * Keep the errors an endpoint declares; report any other platform error as
  * UpstreamError so the contract's error types stay exact.
@@ -620,5 +663,5 @@ function narrowTo<const K extends Tag>(...keep: K[]) {
 }
 
 export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(
-	Layer.provide([SystemLive, BoundaryLive, AuthLive, PostsLive, ModerationLive, AccountLive]),
+	Layer.provide([SystemLive, BoundaryLive, AuthLive, PostsLive, ModerationLive, AccountLive, MediaLive]),
 );

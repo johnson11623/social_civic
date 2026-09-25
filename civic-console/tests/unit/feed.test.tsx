@@ -286,39 +286,40 @@ describe("Composer (W1.4.2)", () => {
 		localStorage.setItem(LAST_CHANNEL_KEY, "c-water");
 		await renderHome([]);
 		await user.click(screen.getByRole("button", { name: "New post" }));
-		const dialog = screen.getByRole("dialog", { name: "New post" });
-		const select = within(dialog).getByRole("combobox", { name: "Channel" });
+		const dialog = screen.getByRole("dialog", { name: "Create a post" });
+		const select = await within(dialog).findByRole("combobox", { name: "Channel" });
 		expect(select).toHaveValue("c-water");
 		// Read-only channels are not offered.
 		expect(within(select).queryByRole("option", { name: "#announcements" })).toBeNull();
-		expect(within(dialog).getByRole("textbox", { name: "What's happening in your ward?" })).toHaveFocus();
+		expect(within(dialog).getByRole("textbox", { name: "What do you want to talk about?" })).toHaveFocus();
 	});
 
 	it("defaults to #general and counts characters up to the limit (T-W1.4.2.2, T-W1.4.2.3)", async () => {
 		const user = userEvent.setup();
 		await renderHome([]);
-		await user.click(screen.getByRole("button", { name: "Share something with your ward" }));
-		expect(screen.getByRole("combobox", { name: "Channel" })).toHaveValue("c-general");
-		const box = screen.getByRole("textbox", { name: "What's happening in your ward?" });
+		await user.click(screen.getByRole("button", { name: "Start a post" }));
+		expect(await screen.findByRole("combobox", { name: "Channel" })).toHaveValue("c-general");
+		const box = screen.getByRole("textbox", { name: "What do you want to talk about?" });
 		await user.type(box, "Habari");
-		expect(screen.getByText("6/500")).toBeInTheDocument();
-		expect(box).toHaveAccessibleDescription(/494 characters left/);
+		// The count appears only near the limit.
+		expect(screen.queryByText(/left$/)).toBeNull();
+		expect(screen.getByRole("button", { name: "Post" })).toBeEnabled();
 
 		await user.clear(box);
 		await user.click(box);
 		await user.paste("x".repeat(501));
-		expect(screen.getByText("501/500")).toBeInTheDocument();
-		await user.click(screen.getByRole("button", { name: "Post" }));
-		expect(screen.getByRole("alert")).toHaveTextContent("Posts can be at most 500 characters.");
+		expect(screen.getByText("-1 left")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
 		expect(api.posts.createPost).not.toHaveBeenCalled();
 	});
 
 	it("refuses an empty post without sending anything (T-W1.4.2.6)", async () => {
 		const user = userEvent.setup();
 		await renderHome([]);
-		await user.click(screen.getByRole("button", { name: "Share something with your ward" }));
-		await user.type(screen.getByRole("textbox"), "   ");
-		await user.click(screen.getByRole("button", { name: "Post" }));
+		await user.click(screen.getByRole("button", { name: "Start a post" }));
+		await user.type(await screen.findByRole("textbox"), "   ");
+		expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
+		await user.keyboard("{Control>}{Enter}{/Control}");
 		expect(screen.getByRole("alert")).toHaveTextContent("Write something before posting.");
 		expect(api.posts.createPost).not.toHaveBeenCalled();
 	});
@@ -329,8 +330,8 @@ describe("Composer (W1.4.2)", () => {
 		api.posts.createPost.mockReturnValue(Effect.promise(() => new Promise<Post>((r) => (resolve = r))));
 		await renderHome([post({ content: "Older post" })]);
 
-		await user.click(screen.getByRole("button", { name: "Share something with your ward" }));
-		await user.selectOptions(screen.getByRole("combobox", { name: "Channel" }), "c-water");
+		await user.click(screen.getByRole("button", { name: "Start a post" }));
+		await user.selectOptions(await screen.findByRole("combobox", { name: "Channel" }), "c-water");
 		await user.type(screen.getByRole("textbox"), "  Borehole fixed today  ");
 		await user.click(screen.getByRole("button", { name: "Post" }));
 
@@ -358,8 +359,8 @@ describe("Composer (W1.4.2)", () => {
 		const user = userEvent.setup();
 		api.posts.createPost.mockReturnValue(Effect.fail({ _tag: "RateLimited", detail: "", retryAfter: 60 }));
 		await renderHome([post({ content: "Older post" })]);
-		await user.click(screen.getByRole("button", { name: "Share something with your ward" }));
-		await user.type(screen.getByRole("textbox"), "Eleventh post this minute");
+		await user.click(screen.getByRole("button", { name: "Start a post" }));
+		await user.type(await screen.findByRole("textbox"), "Eleventh post this minute");
 		await user.click(screen.getByRole("button", { name: "Post" }));
 
 		expect(await screen.findByRole("alert")).toHaveTextContent(

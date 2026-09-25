@@ -225,8 +225,8 @@ describe("ChannelView (W2.1.3)", () => {
 		expect(screen.getByText("120 members")).toBeInTheDocument();
 		expect(screen.getByText("Tap dry since Monday")).toBeInTheDocument();
 
-		await user.click(screen.getByRole("button", { name: "Share something with your ward" }));
-		const select = screen.getByRole("combobox", { name: "Channel" });
+		await user.click(screen.getByRole("button", { name: "Start a post" }));
+		const select = await screen.findByRole("combobox", { name: "Channel" });
 		expect(
 			within(select)
 				.getAllByRole("option")
@@ -248,7 +248,7 @@ describe("ChannelView (W2.1.3)", () => {
 				posts={{ ok: true, value: { channelId: "c-news", items: [], hasMore: false } }}
 			/>,
 		);
-		expect(screen.queryByRole("button", { name: "Share something with your ward" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Start a post" })).toBeNull();
 		expect(screen.queryByRole("button", { name: "New post" })).toBeNull();
 		expect(screen.getByText(/only the channel's creator posts here/)).toBeInTheDocument();
 		expect(screen.getByText("No posts in #announcements yet.")).toBeInTheDocument();
