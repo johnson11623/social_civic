@@ -13,11 +13,17 @@ import type { Channel, Media } from "@/api/api-contract";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { ChevronDownIcon, ImageIcon, VideoIcon, XIcon } from "@/components/ui/icons";
-import { describeError } from "@/lib/api-errors";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { MAX_POST_LENGTH, MEDIA_TYPES } from "@/lib/limits";
-import { checkFile, mediaKind, type UploadFailure, type UploadProgress, uploadMedia } from "@/lib/upload";
+import {
+	checkFile,
+	mediaKind,
+	type UploadFailure,
+	type UploadProgress,
+	uploadFailureText,
+	uploadMedia,
+} from "@/lib/upload";
 import { LAST_CHANNEL_KEY, postLength } from "./Composer";
 
 type OnSubmit = (channel: Channel, content: string, media?: Media) => Promise<string | null>;
@@ -29,6 +35,7 @@ type Props = {
 	/** A photo or video picked from the "Start a post" card. */
 	initialFile?: File | undefined;
 	authorName?: string | undefined;
+	authorAvatar?: string | undefined;
 };
 
 function readLastChannel(): string | null {
@@ -48,7 +55,14 @@ const COUNTER_FROM = MAX_POST_LENGTH - 100;
  * button and upload progress over it, and a toolbar with the Post button.
  * Photos can also be pasted or dropped in; Ctrl/⌘+Enter posts.
  */
-export default function ComposerForm({ channels, onSubmit, onDone, initialFile, authorName }: Props) {
+export default function ComposerForm({
+	channels,
+	onSubmit,
+	onDone,
+	initialFile,
+	authorName,
+	authorAvatar,
+}: Props) {
 	const { t } = useT();
 	const textareaId = useId();
 	const channelId = useId();
@@ -97,20 +111,7 @@ export default function ComposerForm({ channels, onSubmit, onDone, initialFile, 
 		el.style.height = `${el.scrollHeight}px`;
 	}, [content]);
 
-	const failureText = (f: UploadFailure): string => {
-		switch (f.reason) {
-			case "type":
-				return t("composer.badType");
-			case "size":
-				return f.kind === "image" ? t("composer.tooBigImage") : t("composer.tooBigVideo");
-			case "network":
-				return t("composer.uploadFailed");
-			case "processing":
-				return t("composer.processFailed");
-			default:
-				return describeError(f.error, t);
-		}
-	};
+	const failureText = (f: UploadFailure) => uploadFailureText(f, t);
 
 	function pick(next: File | undefined | null) {
 		if (!next) return;
@@ -201,7 +202,7 @@ export default function ComposerForm({ channels, onSubmit, onDone, initialFile, 
 		>
 			{/* Who is posting, and where to. */}
 			<div className="flex items-center gap-3">
-				<Avatar name={authorName || "?"} size="md" />
+				<Avatar name={authorName || "?"} src={authorAvatar} size="md" />
 				<div className="flex min-w-0 flex-col">
 					{authorName && <span className="truncate font-medium text-ink">{authorName}</span>}
 					<label htmlFor={channelId} className="sr-only">

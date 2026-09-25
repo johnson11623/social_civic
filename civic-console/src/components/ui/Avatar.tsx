@@ -2,7 +2,14 @@ import { tv, type VariantProps } from "@/lib/variants";
 
 const avatar = tv({
 	base: "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2 font-medium text-ink",
-	variants: { size: { sm: "h-8 w-8 text-micro", md: "h-10 w-10 text-small", lg: "h-14 w-14 text-h2" } },
+	variants: {
+		size: {
+			sm: "h-8 w-8 text-micro",
+			md: "h-10 w-10 text-small",
+			lg: "h-14 w-14 text-h2",
+			xl: "h-24 w-24 text-h1",
+		},
+	},
 	defaultVariants: { size: "md" },
 });
 

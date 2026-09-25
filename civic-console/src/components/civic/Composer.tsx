@@ -2,6 +2,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { lazy, Suspense, useRef, useState } from "react";
 
 import type { Channel, Media } from "@/api/api-contract";
+import type { HeaderUser } from "@/components/layout/SiteHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { ImageIcon, PlusIcon, VideoIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/Modal";
@@ -24,11 +25,10 @@ type Props = {
 	onSubmit: (channel: Channel, content: string, media?: Media) => Promise<string | null>;
 };
 
-/** The signed-in user's name, from the root loader (see __root.tsx). */
-export function useViewerName(): string | undefined {
+/** The signed-in user (name and photo), from the root loader (see __root.tsx). */
+export function useViewer(): HeaderUser {
 	return useRouterState({
-		select: (s) =>
-			(s.matches[0]?.loaderData as { user?: { displayName: string } | null } | undefined)?.user?.displayName,
+		select: (s) => (s.matches[0]?.loaderData as { user?: HeaderUser } | undefined)?.user ?? null,
 	});
 }
 
@@ -39,7 +39,8 @@ export function useViewerName(): string | undefined {
  */
 export function Composer({ channels, onSubmit }: Props) {
 	const { t } = useT();
-	const name = useViewerName();
+	const viewer = useViewer();
+	const name = viewer?.displayName;
 	const [open, setOpen] = useState(false);
 	const [initialFile, setInitialFile] = useState<File | undefined>();
 	const photoInput = useRef<HTMLInputElement>(null);
@@ -85,7 +86,7 @@ export function Composer({ channels, onSubmit }: Props) {
 		<>
 			<div className="hidden flex-col gap-2 rounded-md border border-border bg-paper p-3 md:flex">
 				<div className="flex items-center gap-3">
-					<Avatar name={name || "?"} size="md" />
+					<Avatar name={name || "?"} src={viewer?.avatarUrl} size="md" />
 					<button
 						type="button"
 						onClick={() => start()}
@@ -130,6 +131,7 @@ export function Composer({ channels, onSubmit }: Props) {
 							onDone={close}
 							initialFile={initialFile}
 							authorName={name}
+							authorAvatar={viewer?.avatarUrl}
 						/>
 					</Suspense>
 				)}

@@ -74,7 +74,7 @@ export const PostCard = memo(function PostCard({
 			)}
 		>
 			<header className="flex items-start gap-3">
-				<Avatar name={name} size="md" />
+				<Avatar name={name} src={post.author?.avatarUrl} size="md" />
 				<div className="flex min-w-0 flex-1 flex-col">
 					<div className="flex flex-wrap items-center gap-x-2">
 						<span className="truncate font-medium text-ink">{name}</span>

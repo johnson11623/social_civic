@@ -13,6 +13,8 @@ import { renderWithProviders } from "../render";
 const api = {
 	account: {
 		updateProfile: vi.fn(),
+		setAvatar: vi.fn(),
+		removeAvatar: vi.fn(),
 		mfaEnrol: vi.fn(),
 		mfaActivate: vi.fn(),
 		withdrawConsent: vi.fn(),
@@ -24,6 +26,13 @@ vi.mock("@/runtimes/get-runtime", () => ({
 	callApiPromise: (fn: (a: typeof api) => Effect.Effect<unknown, unknown>) => Effect.runPromise(fn(api)),
 	callApiEither: (fn: (a: typeof api) => Effect.Effect<unknown, unknown>) =>
 		Effect.runPromise(Effect.either(fn(api))),
+}));
+
+// The upload itself (signed PUT, processing) is covered in media.test.tsx.
+const uploadMedia = vi.fn();
+vi.mock("@/lib/upload", async (original) => ({
+	...(await original<typeof import("@/lib/upload")>()),
+	uploadMedia: (...args: unknown[]) => uploadMedia(...args),
 }));
 
 const { AccountPage } = await import("@/components/account/AccountPage");
@@ -184,6 +193,61 @@ describe("account page", () => {
 			screen.getByText(/requested on 20 September 2026; it will be complete by 20 October 2026/),
 		).toBeInTheDocument();
 		expect(screen.queryByRole("button", { name: "Delete my account" })).toBeNull();
+	});
+});
+
+describe("profile photo", () => {
+	const avatarInput = () => screen.getByTestId("avatar-input") as HTMLInputElement;
+	const png = (size = 2048, type = "image/png") => new File([new Uint8Array(size)], "me.png", { type });
+
+	beforeEach(() => {
+		uploadMedia.mockReset();
+		vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:me", revokeObjectURL: () => {} }));
+	});
+
+	it("uploads a photo, uses it, and shows it", async () => {
+		const user = userEvent.setup();
+		uploadMedia.mockImplementation(async (_f: File, _alt: string, onProgress: (p: unknown) => void) => {
+			onProgress({ stage: "processing" });
+			return { ok: true, media: { mediaId: "m1", kind: "image", state: "ready", altText: "" } };
+		});
+		api.account.setAvatar.mockReturnValue(
+			Effect.succeed(profile({ avatar: { mediaId: "m1", url: "http://cdn/m1/thumbnail.jpg" } })),
+		);
+		await renderWithProviders(<AccountPage profile={profile()} />);
+		expect(screen.queryByRole("button", { name: "Remove photo" })).toBeNull();
+
+		await user.upload(avatarInput(), png());
+		await waitFor(() => expect(api.account.setAvatar).toHaveBeenCalledWith({ payload: { mediaId: "m1" } }));
+		expect(uploadMedia.mock.calls[0]?.[1]).toBe(""); // no description asked for
+		expect(await screen.findByRole("img", { name: "Wanjiku M." })).toHaveAttribute(
+			"src",
+			"http://cdn/m1/thumbnail.jpg",
+		);
+		expect(screen.getByRole("button", { name: "Change photo" })).toBeEnabled();
+		expect(screen.getByRole("button", { name: "Remove photo" })).toBeInTheDocument();
+	});
+
+	it("refuses a video or an oversize photo before uploading", async () => {
+		await renderWithProviders(<AccountPage profile={profile()} />);
+		const user = userEvent.setup({ applyAccept: false });
+		await user.upload(avatarInput(), new File([new Uint8Array(10)], "clip.mp4", { type: "video/mp4" }));
+		expect(screen.getByRole("alert")).toHaveTextContent("Choose a JPEG, PNG or WebP photo.");
+		await user.upload(avatarInput(), png(11 * 1024 * 1024));
+		expect(screen.getByRole("alert")).toHaveTextContent("Photos can be up to 10 MB.");
+		expect(uploadMedia).not.toHaveBeenCalled();
+	});
+
+	it("removes the photo, back to initials", async () => {
+		const user = userEvent.setup();
+		api.account.removeAvatar.mockReturnValue(Effect.succeed(profile()));
+		await renderWithProviders(
+			<AccountPage profile={profile({ avatar: { mediaId: "m1", url: "http://cdn/m1/thumbnail.jpg" } })} />,
+		);
+		await user.click(screen.getByRole("button", { name: "Remove photo" }));
+		expect(api.account.removeAvatar).toHaveBeenCalled();
+		await waitFor(() => expect(screen.getByRole("button", { name: "Add a photo" })).toBeInTheDocument());
+		expect(screen.getByRole("img", { name: "Wanjiku M." })).toHaveTextContent("WM");
 	});
 });
 

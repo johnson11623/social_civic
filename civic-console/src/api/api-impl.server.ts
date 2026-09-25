@@ -512,6 +512,27 @@ const AccountLive = HttpApiBuilder.group(ApiContract, "account", (handlers) =>
 				),
 			),
 		)
+		.handle("setAvatar", ({ payload }) =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.request("PUT", "/v1/users/me/avatar", Profile, {
+					...(yield* authedContext),
+					body: { media_id: payload.mediaId },
+				});
+			}).pipe(
+				Effect.catchTags(
+					narrowTo("Unauthorized", "ValidationFailed", "RateLimited", "BackendUnavailable", "UpstreamError"),
+				),
+			),
+		)
+		.handle("removeAvatar", () =>
+			Effect.gen(function* () {
+				const backend = yield* Backend;
+				return yield* backend.request("DELETE", "/v1/users/me/avatar", Profile, yield* authedContext);
+			}).pipe(
+				Effect.catchTags(narrowTo("Unauthorized", "RateLimited", "BackendUnavailable", "UpstreamError")),
+			),
+		)
 		.handle("withdrawConsent", () =>
 			Effect.gen(function* () {
 				const backend = yield* Backend;

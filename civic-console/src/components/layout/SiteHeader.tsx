@@ -5,7 +5,7 @@ import { button } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n/I18nProvider";
 
 /** The signed-in user, for the header; null when signed out. */
-export type HeaderUser = { displayName: string } | null;
+export type HeaderUser = { displayName: string; avatarUrl?: string | undefined } | null;
 
 /**
  * Top bar on every screen: skip link (T-X.7), brand, and the account: the
@@ -37,7 +37,7 @@ export function SiteHeader({ user }: { user: HeaderUser }) {
 						activeProps={{ "aria-current": "page" }}
 						className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent"
 					>
-						<Avatar name={user.displayName || "?"} size="sm" />
+						<Avatar name={user.displayName || "?"} src={user.avatarUrl} size="sm" />
 					</Link>
 				) : (
 					<Link to="/login" className={button({ variant: "secondary", size: "sm" })}>

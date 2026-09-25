@@ -89,7 +89,7 @@ const ReplyItem = memo(function ReplyItem({
 	return (
 		<article aria-busy={pending || undefined} className={cn("flex flex-col gap-2", pending && "opacity-70")}>
 			<header className="flex items-center gap-2">
-				<Avatar name={name} size="sm" />
+				<Avatar name={name} src={reply.author?.avatarUrl} size="sm" />
 				<span className="truncate font-medium text-small text-ink">{name}</span>
 				<span className="text-micro text-muted">
 					{pending ? (

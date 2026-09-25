@@ -242,6 +242,8 @@ export class AuthGroup extends HttpApiGroup.make("auth")
 export const Author = Schema.Struct({
 	publicId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("public_id")),
 	displayName: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("display_name")),
+	/** Profile photo; initials are shown without one. */
+	avatarUrl: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("avatar_url")),
 });
 
 /** The Go API numbers levels 1 (ward) to 4 (national). */
@@ -698,6 +700,13 @@ export const Profile = Schema.Struct({
 		withdrawnAt: Schema.optionalWith(Schema.String, { exact: true }).pipe(Schema.fromKey("withdrawn_at")),
 	}),
 	mfaEnabled: Schema.propertySignature(Schema.Boolean).pipe(Schema.fromKey("mfa_enabled")),
+	avatar: Schema.optionalWith(
+		Schema.Struct({
+			mediaId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("media_id")),
+			url: Schema.String,
+		}),
+		{ exact: true },
+	),
 	erasure: Schema.optionalWith(
 		Schema.Struct({
 			requestId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("request_id")),
@@ -717,6 +726,10 @@ export const ProfileUpdate = Schema.Struct({
 	preferredLang: Schema.optionalWith(Schema.Literal("en", "sw"), { exact: true }).pipe(
 		Schema.fromKey("preferred_lang"),
 	),
+});
+
+export const AvatarChoice = Schema.Struct({
+	mediaId: Schema.propertySignature(Schema.String).pipe(Schema.fromKey("media_id")),
 });
 
 export const ConsentWithdrawn = Schema.Struct({
@@ -758,6 +771,24 @@ export class AccountGroup extends HttpApiGroup.make("account")
 			.addSuccess(Profile)
 			.addError(Unauthorized)
 			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.put("setAvatar", "/me/avatar")
+			.setPayload(AvatarChoice)
+			.addSuccess(Profile)
+			.addError(Unauthorized)
+			.addError(ValidationFailed)
+			.addError(RateLimited)
+			.addError(BackendUnavailable)
+			.addError(UpstreamError),
+	)
+	.add(
+		HttpApiEndpoint.del("removeAvatar", "/me/avatar")
+			.addSuccess(Profile)
+			.addError(Unauthorized)
 			.addError(RateLimited)
 			.addError(BackendUnavailable)
 			.addError(UpstreamError),

@@ -27,7 +27,9 @@ export const Route = createRootRoute({
 		const session = await callApiPromise((api) => api.auth.session()).catch(() => ({ authenticated: false }));
 		if (!session.authenticated) return { user: null };
 		const profile = settle(await callApiEither((api) => api.account.profile()));
-		return { user: { displayName: profile.ok ? profile.value.displayName : "" } };
+		return profile.ok
+			? { user: { displayName: profile.value.displayName, avatarUrl: profile.value.avatar?.url } }
+			: { user: { displayName: "" } };
 	},
 	head: ({ match }) => ({
 		meta: [

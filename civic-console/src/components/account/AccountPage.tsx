@@ -1,8 +1,9 @@
 import { Link, useNavigate, useRouteContext, useRouter } from "@tanstack/react-router";
-import { type FormEvent, type ReactNode, useId, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import type { Profile } from "@/api/api-contract";
 import { LanguageToggle } from "@/components/civic/LanguageToggle";
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -15,6 +16,8 @@ import { DEFAULT_DISPLAY, type DisplayPrefs, saveDisplay, type Theme } from "@/l
 import { formatDate } from "@/lib/format";
 import { useT } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n/messages";
+import { MEDIA_TYPES } from "@/lib/limits";
+import { checkFile, mediaKind, type UploadProgress, uploadFailureText, uploadMedia } from "@/lib/upload";
 import { useLogout } from "@/lib/use-logout";
 import { callApiEither } from "@/runtimes/get-runtime";
 
@@ -129,6 +132,7 @@ function ProfileSection({ profile, onSaved }: { profile: Profile; onSaved: (p: P
 
 	return (
 		<Section id="profile" titleKey="account.profile">
+			<ProfilePhoto profile={profile} onSaved={onSaved} />
 			<form onSubmit={submit} noValidate className="flex flex-col gap-3 sm:flex-row sm:items-end">
 				<div className="flex-1">
 					<Input
@@ -161,6 +165,129 @@ function ProfileSection({ profile, onSaved }: { profile: Profile; onSaved: (p: P
 				{t("account.memberSince", { date: formatDate(profile.memberSince, lang) })}
 			</p>
 		</Section>
+	);
+}
+
+/**
+ * Profile photo: shown at once from the picked file, with progress over it
+ * while it uploads and is processed (EXIF and GPS are removed), then used on
+ * the user's posts, replies and the header.
+ */
+function ProfilePhoto({ profile, onSaved }: { profile: Profile; onSaved: (p: Profile) => void }) {
+	const { t } = useT();
+	const toast = useToast();
+	const router = useRouter();
+	const input = useRef<HTMLInputElement>(null);
+	const hintId = useId();
+	const [preview, setPreview] = useState<string>();
+	const [progress, setProgress] = useState<UploadProgress | null>(null);
+	const [removing, setRemoving] = useState(false);
+	const [error, setError] = useState<string>();
+	const busy = progress !== null || removing;
+
+	useEffect(() => {
+		if (!preview) return;
+		return () => URL.revokeObjectURL(preview);
+	}, [preview]);
+
+	function done(next: Profile, message: MessageKey) {
+		onSaved(next);
+		toast(t(message));
+		void router.invalidate(); // header, composer and new posts show it
+	}
+
+	async function choose(file: File | undefined) {
+		if (!file) return;
+		if (mediaKind(file.type) !== "image") return setError(t("account.photoType"));
+		const bad = checkFile(file);
+		if (bad) return setError(uploadFailureText(bad, t));
+		setError(undefined);
+		setPreview(URL.createObjectURL(file));
+		setProgress({ stage: "uploading", fraction: 0 });
+		const up = await uploadMedia(file, "", setProgress);
+		const res = up.ok
+			? await callApiEither((api) => api.account.setAvatar({ payload: { mediaId: up.media.mediaId } })).then(
+					settle,
+				)
+			: null;
+		setProgress(null);
+		setPreview(undefined);
+		if (!up.ok) return setError(uploadFailureText(up.failure, t));
+		if (res && !res.ok) return setError(describeError(res.error, t));
+		if (res) done(res.value, "account.photoSaved");
+	}
+
+	async function remove() {
+		setRemoving(true);
+		const res = await callApiEither((api) => api.account.removeAvatar()).then(settle);
+		setRemoving(false);
+		if (!res.ok) return setError(describeError(res.error, t));
+		setError(undefined);
+		done(res.value, "account.photoRemoved");
+	}
+
+	return (
+		<div className="flex items-center gap-4">
+			<div className="relative shrink-0">
+				{preview ? (
+					<span className="inline-flex h-24 w-24 overflow-hidden rounded-full bg-surface-2">
+						<img src={preview} alt="" className="h-full w-full object-cover" />
+					</span>
+				) : (
+					<Avatar name={profile.displayName || "?"} src={profile.avatar?.url} size="xl" />
+				)}
+				{progress && (
+					<span className="absolute inset-0 flex items-center justify-center rounded-full bg-kenya-black/60 text-micro font-medium text-paper">
+						<span role="status">
+							{progress.stage === "uploading"
+								? t("composer.uploading", { percent: Math.round(progress.fraction * 100) })
+								: t("composer.processing", { kind: t("media.image") })}
+						</span>
+					</span>
+				)}
+			</div>
+			<div className="flex min-w-0 flex-col gap-2">
+				<span className="text-small font-medium text-ink">{t("account.photo")}</span>
+				<div className="flex flex-wrap gap-2">
+					<Button
+						type="button"
+						variant="secondary"
+						size="sm"
+						disabled={busy}
+						aria-describedby={hintId}
+						onClick={() => input.current?.click()}
+					>
+						{profile.avatar ? t("account.changePhoto") : t("account.addPhoto")}
+					</Button>
+					{profile.avatar && (
+						<Button type="button" variant="ghost" size="sm" disabled={busy} onClick={remove}>
+							{t("account.removePhoto")}
+						</Button>
+					)}
+				</div>
+				<p id={hintId} className="text-small text-muted">
+					{t("account.photoHint")}
+				</p>
+				{error && (
+					<p role="alert" className="text-small text-danger">
+						{error}
+					</p>
+				)}
+			</div>
+			<input
+				ref={input}
+				type="file"
+				accept={MEDIA_TYPES.image.join(",")}
+				className="sr-only"
+				tabIndex={-1}
+				aria-hidden="true"
+				data-testid="avatar-input"
+				onChange={(e) => {
+					void choose(e.target.files?.[0]);
+					e.target.value = "";
+				}}
+			/>
+		</div>
 	);
 }
 

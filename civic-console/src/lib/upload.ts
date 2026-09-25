@@ -4,7 +4,7 @@
  * then wait while the worker makes the variants.
  */
 import type { Media } from "@/api/api-contract";
-import { type ApiFailure, settle } from "@/lib/api-errors";
+import { type ApiFailure, describeError, settle } from "@/lib/api-errors";
 import { MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MEDIA_TYPES } from "@/lib/limits";
 import { callApiEither } from "@/runtimes/get-runtime";
 
@@ -32,6 +32,22 @@ export function checkFile(file: File): UploadFailure | null {
 	if (!kind) return { reason: "type" };
 	if (file.size > (kind === "image" ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES)) return { reason: "size", kind };
 	return null;
+}
+
+/** What to tell the user about a failed upload. */
+export function uploadFailureText(f: UploadFailure, t: Parameters<typeof describeError>[1]): string {
+	switch (f.reason) {
+		case "type":
+			return t("composer.badType");
+		case "size":
+			return f.kind === "image" ? t("composer.tooBigImage") : t("composer.tooBigVideo");
+		case "network":
+			return t("composer.uploadFailed");
+		case "processing":
+			return t("composer.processFailed");
+		default:
+			return describeError(f.error, t);
+	}
 }
 
 /** PUT with progress events (fetch can't report upload progress). */

@@ -23,9 +23,9 @@ vi.mock("@/runtimes/get-runtime", () => ({
 // T-W1.4.1.8 — count card renders through the Avatar every card draws once.
 const avatarRenders = vi.hoisted(() => new Map<string, number>());
 vi.mock("@/components/ui/Avatar", () => ({
-	Avatar: ({ name }: { name: string }) => {
+	Avatar: ({ name, src }: { name: string; src?: string }) => {
 		avatarRenders.set(name, (avatarRenders.get(name) ?? 0) + 1);
-		return <span role="img" aria-label={name} />;
+		return src ? <img alt={name} src={src} /> : <span role="img" aria-label={name} />;
 	},
 }));
 
@@ -277,6 +277,17 @@ describe("Optimistic likes (T-W1.4.1.6)", () => {
 		await screen.findByRole("button", { name: "Like 3", pressed: true });
 		expect(avatarRenders.get(b.author?.displayName ?? "")).toBe(before.b);
 		expect(avatarRenders.get(a.author?.displayName ?? "")).toBeGreaterThan(before.a ?? 0);
+	});
+});
+
+describe("author photos", () => {
+	it("shows the author's profile photo, or initials without one", async () => {
+		await renderHome([
+			post({ author: { publicId: "a1", displayName: "Amina", avatarUrl: "http://cdn/a1/thumbnail.jpg" } }),
+			post({ author: { publicId: "a2", displayName: "Otieno Kamau" } }),
+		]);
+		expect(screen.getByRole("img", { name: "Amina" })).toHaveAttribute("src", "http://cdn/a1/thumbnail.jpg");
+		expect(screen.getByRole("img", { name: "Otieno Kamau" })).not.toHaveAttribute("src");
 	});
 });
 
