@@ -16,8 +16,8 @@ export const tabId = (level: Level) => `level-tab-${level}`;
 
 /**
  * T-W1.4.1.1 — Ward / Constituency / County / National tabs (WAI-ARIA tabs:
- * one tab in the tab order, arrows/Home/End move and select). Horizontal
- * pills that scroll on narrow screens.
+ * one tab in the tab order, arrows/Home/End move and select). Four equal
+ * segments that always fit: on phones the dots sit above a smaller label.
  */
 export function LevelTabs({ value, onChange, panelId }: Props) {
 	const { t } = useT();
@@ -34,7 +34,11 @@ export function LevelTabs({ value, onChange, panelId }: Props) {
 	};
 
 	return (
-		<div role="tablist" aria-label={t("feed.tabs")} className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+		<div
+			role="tablist"
+			aria-label={t("feed.tabs")}
+			className="grid grid-cols-4 gap-1 rounded-full border border-border bg-surface-2 p-1"
+		>
 			{LEVELS.map((level, i) => {
 				const selected = level === value;
 				return (
@@ -53,17 +57,16 @@ export function LevelTabs({ value, onChange, panelId }: Props) {
 						onClick={() => onChange(level)}
 						onKeyDown={(e) => move(e, i)}
 						className={cn(
-							"inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-small font-medium",
+							"flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-full px-1 text-micro font-medium",
+							"sm:flex-row sm:gap-2 sm:px-3 sm:text-small",
 							"focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent",
-							selected
-								? "border-kenya-green bg-kenya-green text-on-accent"
-								: "border-border bg-paper text-ink hover:bg-surface-2",
+							selected ? "bg-kenya-green text-on-accent" : "text-ink hover:bg-paper",
 						)}
 					>
 						<span aria-hidden="true" className="inline-flex">
 							<LevelIndicator current={level} inverse={selected} />
 						</span>
-						{t(`level.${level}`)}
+						<span className="max-w-full truncate">{t(`level.${level}`)}</span>
 					</button>
 				);
 			})}

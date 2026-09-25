@@ -1,6 +1,7 @@
 package media
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -68,5 +69,15 @@ func TestPrefixedKeys(t *testing.T) {
 	v := prefixed(Variants{Images: []ImageVariant{{WebP: "a.webp", JPEG: "a.jpg"}}, Poster: &ImageVariant{WebP: "p.webp", JPEG: "p.jpg"}, HLS: "master.m3u8"}, "id/")
 	if v.Images[0].WebP != "id/a.webp" || v.Poster.JPEG != "id/p.jpg" || v.HLS != "id/master.m3u8" {
 		t.Errorf("%+v", v)
+	}
+}
+
+func TestUploadURLBase(t *testing.T) {
+	signed, _ := url.Parse("http://localhost:19000/civic-originals/m1/original?X-Amz-Signature=abc&X-Amz-Expires=900")
+	if got := (&Handlers{}).uploadURL(signed); got != signed.String() {
+		t.Errorf("no base: %s", got)
+	}
+	if got := (&Handlers{UploadBase: "/s3/"}).uploadURL(signed); got != "/s3/civic-originals/m1/original?X-Amz-Signature=abc&X-Amz-Expires=900" {
+		t.Errorf("with base: %s", got)
 	}
 }

@@ -47,6 +47,7 @@ type config struct {
 	FeedKey       string
 	S3            media.StorageConfig
 	MediaCDN      string
+	MediaUpload   string // optional base replacing the storage host in upload URLs
 }
 
 func loadConfig() (config, error) {
@@ -63,6 +64,7 @@ func loadConfig() (config, error) {
 		FeedKey:       os.Getenv("FEED_SIGNING_KEY"),
 		S3:            media.StorageConfigFromEnv(),
 		MediaCDN:      getenv("MEDIA_CDN_URL", "http://localhost:18080/media/variants"),
+		MediaUpload:   os.Getenv("MEDIA_UPLOAD_BASE"),
 	}
 	switch {
 	case c.DatabaseURL == "":
@@ -253,7 +255,8 @@ func run(logger *slog.Logger) error {
 			logger.Warn("media storage unavailable; uploads will fail until it is up (make media-up)", "err", err)
 		}
 		cancelBuckets()
-		uploads := &media.Handlers{Pool: pool, Storage: storage, CDNBase: cfg.MediaCDN, Logger: logger, Now: time.Now}
+		uploads := &media.Handlers{Pool: pool, Storage: storage, CDNBase: cfg.MediaCDN, UploadBase: cfg.MediaUpload,
+			Logger: logger, Now: time.Now}
 		// 30 uploads an hour per user.
 		r.With(requireAuth, requireConsent, perUser("media", 30, time.Hour)).Post("/v1/media/uploads", uploads.CreateUpload)
 		r.With(requireAuth, requireConsent).Post("/v1/media/{media_id}/complete", uploads.Complete)

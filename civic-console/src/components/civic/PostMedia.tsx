@@ -15,7 +15,16 @@ import { useT } from "@/lib/i18n/I18nProvider";
  * - videos play muted while on screen and pause when scrolled away, one at a
  *   time, unless the viewer saves data, is on 2G or prefers reduced motion.
  */
-export function PostMedia({ media, authorName }: { media: Media; authorName?: string | undefined }) {
+export function PostMedia({
+	media,
+	authorName,
+	priority = false,
+}: {
+	media: Media;
+	authorName?: string | undefined;
+	/** Load now, at high priority (the first photo on the page), instead of lazily. */
+	priority?: boolean;
+}) {
 	const { t } = useT();
 	// Without a description, say what it is and whose it is (never an empty alt).
 	const label =
@@ -26,7 +35,7 @@ export function PostMedia({ media, authorName }: { media: Media; authorName?: st
 	return media.kind === "video" ? (
 		<VideoPlayer media={media} label={label} />
 	) : (
-		<Picture media={media} label={label} />
+		<Picture media={media} label={label} priority={priority} />
 	);
 }
 
@@ -54,15 +63,15 @@ function Frame({
 	backdrop?: string | undefined;
 	children: ReactNode;
 }) {
-	const own = (media.width ?? 16) / Math.max(media.height ?? 9, 1);
 	const ratio = frameRatio(media.width, media.height);
-	const bars = Math.abs(own - ratio) > 0.01;
 	return (
+		// Height is also capped (about half a laptop screen, 65% of a phone's),
+		// so one post never takes over the feed; the rest shows as bars.
 		<div
-			className="relative w-full overflow-hidden rounded-md bg-surface-2"
+			className="relative max-h-[min(30rem,65vh)] w-full overflow-hidden rounded-md bg-surface-2"
 			style={{ aspectRatio: String(ratio) } as CSSProperties}
 		>
-			{bars && backdrop && (
+			{backdrop && (
 				<img
 					src={backdrop}
 					alt=""
@@ -77,7 +86,7 @@ function Frame({
 
 // ---- Photos ------------------------------------------------------------------------------
 
-function Picture({ media, label }: { media: Media; label: string }) {
+function Picture({ media, label, priority }: { media: Media; label: string; priority: boolean }) {
 	const img = useRef<HTMLImageElement>(null);
 	const [loaded, setLoaded] = useState(false);
 	const images = media.images ?? [];
@@ -89,6 +98,7 @@ function Picture({ media, label }: { media: Media; label: string }) {
 	}, []);
 
 	if (!fallback) return null;
+	// The feed column is at most ~640px wide; phones use the full width.
 	const sizes = "(min-width: 768px) 640px, 100vw";
 	return (
 		<Frame media={media} backdrop={media.placeholder}>
@@ -117,7 +127,8 @@ function Picture({ media, label }: { media: Media; label: string }) {
 					width={media.width}
 					height={media.height}
 					alt={label}
-					loading="lazy"
+					loading={priority ? "eager" : "lazy"}
+					fetchPriority={priority ? "high" : "auto"}
 					decoding="async"
 					onLoad={() => setLoaded(true)}
 					className={cn(

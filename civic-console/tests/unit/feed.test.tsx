@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Effect } from "effect";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Channel, FeedPage, Post } from "@/api/api-contract";
 import { expectNoA11yViolations } from "../axe";
@@ -171,6 +171,65 @@ describe("Feed pagination (T-W1.4.1.2)", () => {
 		expect(screen.getAllByRole("article")).toHaveLength(3);
 		expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
 		expect(screen.getByText("You're all caught up.")).toBeInTheDocument();
+	});
+});
+
+describe("loading as you scroll", () => {
+	// The sentinel's observer; tests say when the end of the list comes near.
+	let near: (() => void) | undefined;
+	beforeEach(() => {
+		near = undefined;
+		vi.stubGlobal(
+			"IntersectionObserver",
+			class {
+				constructor(private cb: IntersectionObserverCallback) {}
+				observe(el: Element) {
+					near = () =>
+						this.cb([{ isIntersecting: true, target: el } as IntersectionObserverEntry], this as never);
+				}
+				disconnect() {}
+			},
+		);
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		Reflect.deleteProperty(navigator, "connection");
+	});
+
+	it("fetches the next page before the reader reaches the end", async () => {
+		api.posts.feed.mockReturnValue(Effect.succeed(page([post({ content: "From page two" })])));
+		await renderHome([post(), post()], { more: "cursor-1" });
+		expect(screen.queryByRole("button", { name: "Load more" })).toBeNull(); // no button to press
+		await act(async () => near?.());
+		expect(await screen.findByText("From page two")).toBeInTheDocument();
+		expect(api.posts.feed).toHaveBeenCalledWith({
+			urlParams: { level: "ward", limit: 20, cursor: "cursor-1" },
+		});
+		expect(screen.getByText("You're all caught up.")).toBeInTheDocument();
+	});
+
+	it("asks first when data saver is on", async () => {
+		Object.defineProperty(navigator, "connection", { value: { saveData: true }, configurable: true });
+		await renderHome([post()], { more: "cursor-1" });
+		expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+		await act(async () => near?.());
+		expect(api.posts.feed).not.toHaveBeenCalled();
+	});
+
+	it("gives the first photo priority and lazy-loads the rest", async () => {
+		const photo = (id: string) => ({
+			mediaId: id,
+			kind: "image" as const,
+			state: "ready" as const,
+			altText: id,
+			width: 1200,
+			height: 800,
+			images: [{ name: "medium", width: 1080, height: 720, jpegUrl: `/media/variants/${id}/medium.jpg` }],
+		});
+		await renderHome([post({ media: photo("first") }), post({ media: photo("second") })]);
+		expect(screen.getByRole("img", { name: "first" })).toHaveAttribute("loading", "eager");
+		expect(screen.getByRole("img", { name: "first" })).toHaveAttribute("fetchpriority", "high");
+		expect(screen.getByRole("img", { name: "second" })).toHaveAttribute("loading", "lazy");
 	});
 });
 

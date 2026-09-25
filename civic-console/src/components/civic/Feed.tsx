@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 import type { Post } from "@/api/api-contract";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -22,14 +24,56 @@ type Props = {
 	onReport?: ((post: Post) => void) | undefined;
 };
 
+/** Pages fetched automatically before asking, so the footer stays reachable. */
+const AUTO_PAGES = 5;
+/** Fetch the next page this far before the reader reaches the end. */
+const AHEAD = "1200px 0px";
+
+/** Data savers choose when to spend data. */
+function autoLoadAllowed(): boolean {
+	if (typeof IntersectionObserver === "undefined") return false;
+	const net = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+	return !net?.saveData;
+}
+
 /**
- * T-W1.4.1.2 — the post list with an explicit "Load more" (no infinite
- * scroll: data costs and a findable footer, Web App Design §5.1).
+ * T-W1.4.1.2 — the post list. The next page loads about a screen and a half
+ * before the reader gets there (as on LinkedIn), for up to AUTO_PAGES pages;
+ * then, on error, or with data saver on, "Load more" asks first (data costs
+ * and a findable footer, Web App Design §5.1).
  * T-W1.4.1.7 — skeletons shaped like cards while a page replaces the list.
  */
 export function Feed(props: Props) {
 	const { t } = useT();
 	const { posts, loading, error } = props;
+	const sentinel = useRef<HTMLDivElement>(null);
+	const loadMore = useRef(props.onLoadMore);
+	loadMore.current = props.onLoadMore;
+	const [auto] = useState(autoLoadAllowed);
+	const [autoLoads, setAutoLoads] = useState(0);
+
+	// A new list (tab change, retry) starts counting again.
+	useEffect(() => {
+		if (loading) setAutoLoads(0);
+	}, [loading]);
+
+	const canAuto = auto && props.hasMore && !props.loadingMore && !props.moreError && autoLoads < AUTO_PAGES;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-arm after each page (posts.length)
+	useEffect(() => {
+		const el = sentinel.current;
+		if (!canAuto || !el) return;
+		const io = new IntersectionObserver(
+			([e]) => {
+				if (!e?.isIntersecting) return;
+				io.disconnect();
+				setAutoLoads((n) => n + 1);
+				loadMore.current();
+			},
+			{ rootMargin: AHEAD },
+		);
+		io.observe(el);
+		return () => io.disconnect();
+	}, [canAuto, posts.length]);
 
 	if (loading) {
 		return (
@@ -78,10 +122,11 @@ export function Feed(props: Props) {
 	return (
 		<div className="flex flex-col gap-4">
 			<div role="feed" aria-busy={props.loadingMore} className="flex flex-col gap-4">
-				{posts.map((post) => (
+				{posts.map((post, i) => (
 					<PostCard
 						key={post.postId}
 						post={post}
+						priority={i === 0}
 						pending={props.pendingIds.has(post.postId)}
 						linkThread
 						onLike={props.onLike}
@@ -90,20 +135,23 @@ export function Feed(props: Props) {
 					/>
 				))}
 			</div>
+			<div ref={sentinel} aria-hidden="true" />
 			{props.moreError && (
 				<p role="alert" className="text-small text-danger">
 					{props.moreError}
 				</p>
 			)}
 			{props.hasMore ? (
-				<Button
-					variant="secondary"
-					className="self-center"
-					disabled={props.loadingMore}
-					onClick={props.onLoadMore}
-				>
-					{props.loadingMore ? <Spinner label={t("feed.loading")} /> : t("feed.loadMore")}
-				</Button>
+				props.loadingMore || !canAuto ? (
+					<Button
+						variant="secondary"
+						className="self-center"
+						disabled={props.loadingMore}
+						onClick={props.onLoadMore}
+					>
+						{props.loadingMore ? <Spinner label={t("feed.loading")} /> : t("feed.loadMore")}
+					</Button>
+				) : null
 			) : (
 				<p className="text-center text-small text-muted">{t("feed.end")}</p>
 			)}

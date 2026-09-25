@@ -24,6 +24,17 @@ export default defineConfig({
 			".ngrok.app",
 			...(process.env.VITE_ALLOWED_HOSTS?.split(",").filter(Boolean) ?? []),
 		],
+		// Media through this address (the API returns /media/variants/… and
+		// /s3/… URLs in development), so other devices load and upload too.
+		proxy: {
+			"/media/variants": { target: `http://localhost:${process.env.MEDIA_CDN_PORT ?? "18080"}` },
+			// changeOrigin sends storage's own Host, which the upload signature covers.
+			"/s3": {
+				target: `http://localhost:${process.env.S3_PORT ?? "19000"}`,
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/s3/, ""),
+			},
+		},
 	},
 	build: {
 		rolldownOptions: {

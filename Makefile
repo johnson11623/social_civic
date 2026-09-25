@@ -134,12 +134,15 @@ admin-grant: ## Grant a platform role in the dev database: make admin-grant USER
 	go run ./cmd/admin -database "$(HOST_DB_URL)" -user "$(USER_ID)" -role "$(or $(ROLE),sysadmin)"
 
 # Environment for the API in development (dev-only secrets).
+# Media and uploads go through the web app's address (its dev server proxies
+# /media/variants to the CDN and /s3 to storage), so phones on the LAN or an
+# ngrok tunnel load photos and videos too, not only this machine.
 API_ENV = DATABASE_URL="$(HOST_DB_URL)" \
 	REDIS_URL="redis://localhost:$(REDIS_PORT)/0" \
 	RATE_LIMIT_KEY="$(DEV_RATE_LIMIT_KEY)" \
 	FEED_SIGNING_KEY="$(DEV_FEED_SIGNING_KEY)" \
 	S3_ENDPOINT="localhost:$(S3_PORT)" S3_ACCESS_KEY=civicdev S3_SECRET_KEY=civicdev-secret-change-me \
-	MEDIA_CDN_URL="http://localhost:$(MEDIA_CDN_PORT)/media/variants" \
+	MEDIA_CDN_URL="/media/variants" MEDIA_UPLOAD_BASE="/s3" \
 	PII_ENCRYPTION_KEY="$(DEV_PII_ENCRYPTION_KEY)" \
 	JWT_SIGNING_KEY="$(DEV_JWT_SIGNING_KEY)" \
 	NATIONAL_ID_PEPPER="$(DEV_NATIONAL_ID_PEPPER)"

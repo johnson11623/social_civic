@@ -25,6 +25,8 @@ type Props = {
 	/** The viewer wrote this post: removed/frozen notices offer the appeal. */
 	viewerIsAuthor?: boolean;
 	onAppeal?: ((post: Post) => void) | undefined;
+	/** Near the top of the page: load its photo first (it's what the eye lands on). */
+	priority?: boolean;
 };
 
 /**
@@ -44,6 +46,7 @@ export const PostCard = memo(function PostCard({
 	onReport,
 	viewerIsAuthor = false,
 	onAppeal,
+	priority = false,
 }: Props) {
 	const { t, lang } = useT();
 	const name = post.author?.displayName ?? "—";
@@ -69,6 +72,8 @@ export const PostCard = memo(function PostCard({
 			aria-busy={pending || undefined}
 			className={cn(
 				"flex flex-col gap-3 rounded-md border border-border bg-paper p-4",
+				// Off-screen cards skip layout and paint until scrolled near.
+				linkThread && "[contain-intrinsic-size:auto_24rem] [content-visibility:auto]",
 				post.sponsored && "border-sponsored",
 				pending && "opacity-70",
 			)}
@@ -96,7 +101,9 @@ export const PostCard = memo(function PostCard({
 			{post.level !== "ward" && <ElevationBanner level={post.level} onWhy={() => onWhy(post)} />}
 			{notice}
 			{post.content && <p className="whitespace-pre-wrap break-words text-body text-ink">{post.content}</p>}
-			{post.media && <PostMedia media={post.media} authorName={post.author?.displayName} />}
+			{post.media && (
+				<PostMedia media={post.media} authorName={post.author?.displayName} priority={priority} />
+			)}
 			<InteractionBar
 				likes={post.counts.likes}
 				replies={post.counts.replies}

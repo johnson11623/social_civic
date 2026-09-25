@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -30,9 +31,14 @@ const UploadTTL = 15 * time.Minute
 type Handlers struct {
 	Pool    *pgxpool.Pool
 	Storage *Storage
-	CDNBase string // e.g. http://localhost:18080/media/variants
-	Logger  *slog.Logger
-	Now     func() time.Time
+	CDNBase string // e.g. http://localhost:18080/media/variants, or /media/variants behind the web app
+	// UploadBase, when set, replaces the scheme and host of signed upload
+	// URLs (e.g. "/s3" in development, where the web app proxies it to
+	// storage with the original Host, so the signature still holds). Lets
+	// devices other than this machine upload through one address.
+	UploadBase string
+	Logger     *slog.Logger
+	Now        func() time.Time
 }
 
 func (h *Handlers) internal(w http.ResponseWriter, r *http.Request, op string, err error) {
@@ -126,7 +132,7 @@ func (h *Handlers) CreateUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	httpjson.Write(w, http.StatusCreated, UploadResponse{
 		MediaID: id.String(), Kind: kind.String(),
-		Upload: UploadTarget{URL: target.String(), Method: http.MethodPut,
+		Upload: UploadTarget{URL: h.uploadURL(target), Method: http.MethodPut,
 			Headers: map[string]string{"Content-Type": mime}, ExpiresAt: h.Now().Add(UploadTTL).UTC()},
 	})
 }
@@ -243,6 +249,14 @@ func (h *Handlers) toJSON(m mediadb.GetMediaRow) MediaJSON {
 		}
 	}
 	return out
+}
+
+// uploadURL is where the client sends the file (see UploadBase).
+func (h *Handlers) uploadURL(u *url.URL) string {
+	if h.UploadBase == "" {
+		return u.String()
+	}
+	return strings.TrimSuffix(h.UploadBase, "/") + u.RequestURI()
 }
 
 func pgtypeText(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} }
